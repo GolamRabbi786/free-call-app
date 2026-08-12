@@ -68,12 +68,14 @@ export const send = mutation({
       throw new Error("Not part of this conversation");
     }
 
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       conversationId,
       senderId: me._id,
       body: trimmed,
-    }).then(async (messageId) => {
-      // Web Push to the other participant when they're not in the app.
+    });
+    // Web Push to the other participant when they're not in the app. Never
+    // let a push hiccup break sending the message itself.
+    try {
       const recipientId = convo.userA === me._id ? convo.userB : convo.userA;
       await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
         toUserId: recipientId,
@@ -81,8 +83,10 @@ export const send = mutation({
         body: trimmed,
         conversationId,
       });
-      return messageId;
-    });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return messageId;
   },
 });
 
@@ -105,12 +109,13 @@ export const sendAttachment = mutation({
     }
 
     const attachment = await resolveAttachment(ctx, args);
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: me._id,
       body: "",
       attachment,
-    }).then(async (messageId) => {
+    });
+    try {
       const recipientId =
         convo.userA === me._id ? convo.userB : convo.userA;
       await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
@@ -119,8 +124,10 @@ export const sendAttachment = mutation({
         body: args.name,
         conversationId: args.conversationId,
       });
-      return messageId;
-    });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return messageId;
   },
 });
 
@@ -164,12 +171,14 @@ export const sendGroup = mutation({
       .first();
     if (!isMember) throw new Error("Not a member of this group");
 
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       groupId,
       senderId: me._id,
       body: trimmed,
-    }).then(async (messageId) => {
-      // Web Push to every other member who isn't in the app right now.
+    });
+    // Web Push to every other member who isn't in the app right now. Never
+    // let a push hiccup break sending the message itself.
+    try {
       const members = await ctx.db
         .query("groupMembers")
         .withIndex("by_group", (q) => q.eq("groupId", groupId))
@@ -186,8 +195,10 @@ export const sendGroup = mutation({
             }),
           ),
       );
-      return messageId;
-    });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return messageId;
   },
 });
 
@@ -212,12 +223,13 @@ export const sendGroupAttachment = mutation({
     if (!isMember) throw new Error("Not a member of this group");
 
     const attachment = await resolveAttachment(ctx, args);
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       groupId: args.groupId,
       senderId: me._id,
       body: "",
       attachment,
-    }).then(async (messageId) => {
+    });
+    try {
       const members = await ctx.db
         .query("groupMembers")
         .withIndex("by_group", (q) => q.eq("groupId", args.groupId))
@@ -234,7 +246,9 @@ export const sendGroupAttachment = mutation({
             }),
           ),
       );
-      return messageId;
-    });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return messageId;
   },
 });

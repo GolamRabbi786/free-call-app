@@ -12,12 +12,45 @@
  */
 
 export const RTC_CONFIG: RTCConfiguration = {
+  // Multiple independent STUN servers improve NAT traversal odds when one
+  // provider is unreachable or blocked.
   iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
+    {
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:stun.cloudflare.com:3478",
+        "stun:global.stun.twilio.com:3478",
+      ],
+    },
   ],
   iceCandidatePoolSize: 4,
 };
+
+// One control data channel per peer connection, tracked so the offerer never
+// creates a duplicate (a duplicate id would break negotiation).
+const ctlChannels = new WeakMap<RTCPeerConnection, RTCDataChannel>();
+
+/**
+ * Ensure the peer connection has a "control" data channel. The offerer calls
+ * this right before createOffer, so the SDP always carries an m=application
+ * line: ICE then runs and the call can connect even when camera/mic media is
+ * unavailable (otherwise an SDP with no media sections gathers no candidates
+ * and the connection fails).
+ */
+export function ensureDataChannel(
+  pc: RTCPeerConnection,
+): RTCDataChannel | undefined {
+  const existing = ctlChannels.get(pc);
+  if (existing) return existing;
+  try {
+    const dc = pc.createDataChannel("freecall-ctl");
+    ctlChannels.set(pc, dc);
+    return dc;
+  } catch {
+    return undefined;
+  }
+}
 
 export type SignalPayload =
   | { type: "offer"; sdp: string }

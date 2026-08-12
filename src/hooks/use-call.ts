@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   acquireMedia,
   createPeerConnection,
+  ensureDataChannel,
   type SignalPayload,
 } from "@/lib/webrtc";
 import { useAuth } from "./use-auth";
@@ -39,6 +40,14 @@ type SignalDoc = {
  * Owns the current user's live call: subscribes to the active call session,
  * runs the WebRTC peer connection, exchanges signaling through Convex, and
  * exposes controls (accept / decline / end / mute / camera).
+ *
+ * Connection flow (both participants only negotiate once the call is
+ * "active", i.e. the callee accepted):
+ *   caller  -> acquire media, create PC, create offer, send offer
+ *   callee  -> acquire media, receive offer, create answer, send answer
+ *   both    -> exchange ICE candidates; the offerer opens a control data
+ *              channel so the SDP always has an m=application line (ICE runs
+ *              even if camera/mic media is unavailable).
  */
 export function useCall() {
   const { user } = useAuth();
@@ -122,7 +131,11 @@ export function useCall() {
           });
           myEndRef.current = true;
           const live = sessionRef.current;
-          if (live) void endCallMutation({ sessionId: live._id });
+          if (live) {
+            void endCallMutation({ sessionId: live._id }).catch(() => {
+              /* call already gone — fine */
+            });
+          }
         }
       };
       pcRef.current = pc;
@@ -137,7 +150,11 @@ export function useCall() {
       .catch((error) => console.warn("Signal processing error:", error));
   }, []);
 
-  // Process incoming signaling messages in order.
+  // Process incoming signaling messages in order. IMPORTANT: every status
+  // check uses the session object from the CURRENT render (passed in as `s`),
+  // never a ref — a stale ref made the callee skip the offer in the same
+  // commit the call flipped to "active", so the caller never got an answer
+  // and the connection failed.
   useEffect(() => {
     if (!session || !signals || !myId) return;
     for (const sig of signals) {
@@ -153,7 +170,6 @@ export function useCall() {
 
   const processSignal = async (sig: SignalDoc, s: ActiveCall) => {
     const payload = sig.payload;
-    const live = sessionRef.current ?? s;
     const isCallee = s.calleeId === myId;
 
     if (payload.type === "offer") {
@@ -161,9 +177,11 @@ export function useCall() {
         appliedSignalsRef.current.add(sig._id);
         return;
       }
-      // Wait until the callee actually accepts before answering.
-      if (live.status !== "active") return;
-      const pc = getOrCreatePC(live);
+      // The caller only sends its offer once the call is active, but guard
+      // anyway: if it somehow arrives before the callee accepts, skip and let
+      // the effect re-process it on the next render (when `s` shows active).
+      if (s.status !== "active") return;
+      const pc = getOrCreatePC(s);
       // IMPORTANT: the callee's local mic/camera tracks must be added to the
       // connection BEFORE createAnswer, otherwise the answer's SDP negotiates
       // no audio/video and the caller hears nothing / sees no video. Media
@@ -187,11 +205,11 @@ export function useCall() {
         appliedSignalsRef.current.add(sig._id);
         return;
       }
-      const pc = getOrCreatePC(live);
+      const pc = getOrCreatePC(s);
       await pc.setRemoteDescription({ type: "answer", sdp: payload.sdp });
       await flushPendingCandidates(pc);
     } else if (payload.type === "ice") {
-      const pc = getOrCreatePC(live);
+      const pc = getOrCreatePC(s);
       if (pc.remoteDescription) {
         try {
           await pc.addIceCandidate(payload.candidate);
@@ -266,9 +284,12 @@ export function useCall() {
     }
   }, [session?._id, session === null]);
 
-  // Caller: acquire media, create the offer, and send it.
+  // Caller: once the callee accepts (status "active"), acquire media and send
+  // the offer. Sending it only after accept removes the ringing-phase race
+  // where the callee had to defer the offer until the status flipped.
   useEffect(() => {
     if (!session || session.callerId !== myId || !myId) return;
+    if (session.status !== "active") return;
     if (localStreamRef.current) return;
     let cancelled = false;
 
@@ -282,19 +303,19 @@ export function useCall() {
         stream?.getTracks().forEach((t) => t.stop());
         return;
       }
-      const live = sessionRef.current;
-      if (!live) return;
-      const pc = getOrCreatePC(live);
+      const pc = getOrCreatePC(session);
       if (stream) {
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         localStreamRef.current = stream;
         setLocalStream(stream);
       }
       if (!pc.localDescription) {
+        // Guarantee an m-line so ICE runs even if media is unavailable.
+        ensureDataChannel(pc);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await sendSignal({
-          sessionId: live._id,
+          sessionId: session._id,
           payload: { type: "offer", sdp: pc.localDescription!.sdp },
         });
       }
@@ -304,7 +325,7 @@ export function useCall() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?._id, myId]);
+  }, [session?._id, session?.status, myId]);
 
   // Callee: acquire media once the call is accepted, and flag when the
   // attempt finishes so the offer handler can answer only after our tracks
@@ -327,12 +348,7 @@ export function useCall() {
         localMediaAttemptRef.current = { attempted: true };
         return;
       }
-      const live = sessionRef.current;
-      if (!live) {
-        localMediaAttemptRef.current = { attempted: true };
-        return;
-      }
-      const pc = getOrCreatePC(live);
+      const pc = getOrCreatePC(session);
       if (stream) {
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         localStreamRef.current = stream;

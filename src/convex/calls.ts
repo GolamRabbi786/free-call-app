@@ -132,21 +132,26 @@ export const startCall = mutation({
       throw new Error(`${callee.name ?? "This person"} is already in a call`);
     }
 
-    return await ctx.db.insert("callSessions", {
+    const sessionId = await ctx.db.insert("callSessions", {
       callerId: me._id,
       calleeId,
       kind,
       status: "ringing",
-    }).then(async (sessionId) => {
-      // Web Push so the callee still sees the incoming call if the app is
-      // closed or backgrounded (skipped automatically when they're online).
+    });
+
+    // Web Push so the callee still sees the incoming call if the app is
+    // closed or backgrounded (skipped automatically when they're online).
+    // Never let a push hiccup break the call itself.
+    try {
       await ctx.scheduler.runAfter(0, api.webPushSender.notifyIncomingCall, {
         calleeId,
         callerId: me._id,
         kind,
       });
-      return sessionId;
-    });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return sessionId;
   },
 });
 
@@ -305,7 +310,14 @@ export const activeCallFor = query({
     ) {
       return null;
     }
-    if (now - session._creationTime > STALE_SESSION_MS) return null;
+    // Ringing/end states go stale quickly, but an ACTIVE call may legitimately
+    // run for a long time — never kill a connected call via this safety net.
+    if (
+      session.status !== "active" &&
+      now - session._creationTime > STALE_SESSION_MS
+    ) {
+      return null;
+    }
 
     const [caller, callee] = await Promise.all([
       ctx.db.get(session.callerId),

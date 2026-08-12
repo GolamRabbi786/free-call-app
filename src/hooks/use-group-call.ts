@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   acquireMedia,
   createPeerConnection,
+  ensureDataChannel,
   type SignalPayload,
 } from "@/lib/webrtc";
 import { useAuth } from "./use-auth";
@@ -206,6 +207,8 @@ export function useGroupCall() {
       if (isOfferer && !pc.localDescription) {
         void (async () => {
           try {
+            // Guarantee an m-line so ICE runs even if media is unavailable.
+            ensureDataChannel(pc);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             await sendSignal(s._id, participantId, {

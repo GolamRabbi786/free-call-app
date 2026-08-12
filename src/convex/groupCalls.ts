@@ -50,23 +50,28 @@ export const startGroupCall = mutation({
       .collect();
     const participantIds = memberDocs.map((m) => m.userId);
 
-    return await ctx.db.insert("groupCallSessions", {
+    const sessionId = await ctx.db.insert("groupCallSessions", {
       groupId,
       initiatorId: me._id,
       kind,
       status: "active",
       participantIds,
       startedAt: Date.now(),
-    }).then(async (sessionId) => {
-      // Web Push to members who aren't in the app so they can join the call.
+    });
+
+    // Web Push to members who aren't in the app so they can join the call.
+    // Never let a push hiccup break the group call itself.
+    try {
       await ctx.scheduler.runAfter(0, api.webPushSender.notifyGroupCall, {
         groupId,
         initiatorId: me._id,
         kind,
         memberIds: participantIds,
       });
-      return sessionId;
-    });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return sessionId;
   },
 });
 
