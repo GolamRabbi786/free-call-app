@@ -146,6 +146,12 @@ const schema = defineSchema(
       data: v.any(),
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),
+
+    // Admin panel sessions: a token minted on successful admin login.
+    adminSessions: defineTable({
+      token: v.string(),
+      createdAt: v.number(),
+    }).index("by_token", ["token"]),
   },
   {
     schemaValidation: false,

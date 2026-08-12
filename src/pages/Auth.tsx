@@ -16,8 +16,9 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import logo from "@/assets/logo.svg";
+import { Link } from "react-router";
 import { AppBackground } from "@/components/AppBackground";
-import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
+import { ArrowRight, Loader2, Mail, ShieldCheck, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -285,16 +286,26 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </>
           )}
 
-          <div className="glass-soft py-4 px-6 text-xs text-center text-slate-500 rounded-b-3xl border-t border-white/60">
-            Secured by{" "}
-            <a
-              href="https://freebuff.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-primary transition-colors"
+          <div className="glass-soft flex items-center justify-center gap-2 py-4 px-6 text-xs text-slate-500 rounded-b-3xl border-t border-white/60">
+            <span>
+              Secured by{" "}
+              <a
+                href="https://freebuff.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-primary transition-colors"
+              >
+                freebuff.com
+              </a>
+            </span>
+            <span aria-hidden>·</span>
+            <Link
+              to="/admin"
+              className="flex items-center gap-1 underline hover:text-primary transition-colors"
             >
-              freebuff.com
-            </a>
+              <ShieldCheck className="size-3" />
+              Admin panel
+            </Link>
           </div>
         </Card>
         </div>
