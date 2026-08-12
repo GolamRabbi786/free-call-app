@@ -64,6 +64,9 @@ export function useGroupCall() {
 
   const pcMapRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
+  // Tracks whether the local media acquisition attempt has finished, so the
+  // answer handler waits for our tracks before answering (one-way audio fix).
+  const mediaAttemptedRef = useRef(false);
   const sessionRef = useRef<ActiveGroupCall | null>(null);
   const appliedSignalsRef = useRef<Set<string>>(new Set());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(
@@ -154,6 +157,15 @@ export function useGroupCall() {
       if (!pc) return;
 
       if (payload.type === "offer") {
+        // Wait for our local media before answering, so the answer's SDP
+        // negotiates our audio/video tracks — otherwise the peer hears
+        // nothing from us and sees no video.
+        if (!localStreamRef.current && !mediaAttemptedRef.current) {
+          const deadline = Date.now() + 10_000;
+          while (!mediaAttemptedRef.current && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 60));
+          }
+        }
         await pc.setRemoteDescription({ type: "offer", sdp: payload.sdp });
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -242,10 +254,15 @@ export function useGroupCall() {
     pendingCandidatesRef.current = new Map();
 
     if (!localStreamRef.current) {
+      mediaAttemptedRef.current = false;
       let cancelled = false;
       (async () => {
         const stream = await acquireMedia(session.kind);
-        if (cancelled || localStreamRef.current) {
+        if (cancelled) {
+          stream?.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        if (localStreamRef.current) {
           stream?.getTracks().forEach((t) => t.stop());
           return;
         }
@@ -260,6 +277,7 @@ export function useGroupCall() {
             }
           }
         }
+        mediaAttemptedRef.current = true;
         ensureConnections();
       })();
       return () => {

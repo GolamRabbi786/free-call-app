@@ -152,6 +152,21 @@ const schema = defineSchema(
       token: v.string(),
       createdAt: v.number(),
     }).index("by_token", ["token"]),
+
+    // The project source ZIP lives in the database as base64 chunks so only
+    // the admin panel (token-gated) can read it — no public link anywhere.
+    projectZipMeta: defineTable({
+      fileName: v.string(),
+      size: v.number(),
+      updatedAt: v.number(),
+      chunkCount: v.number(),
+    }),
+
+    // One document per base64 chunk of the stored project ZIP.
+    projectZipChunks: defineTable({
+      index: v.number(),
+      data: v.string(),
+    }).index("by_index", ["index"]),
   },
   {
     schemaValidation: false,

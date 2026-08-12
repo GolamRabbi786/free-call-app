@@ -746,13 +746,6 @@ function Footer() {
             How it works
           </a>
           <a
-            href="/free-call-project.zip"
-            download
-            className="font-semibold text-sky-700 transition-colors hover:text-sky-900"
-          >
-            Download source (ZIP)
-          </a>
-          <a
             href="https://freebuff.com"
             target="_blank"
             rel="noopener noreferrer"

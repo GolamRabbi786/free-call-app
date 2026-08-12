@@ -236,3 +236,83 @@ export const removeUser = mutation({
     await ctx.db.delete(userId);
   },
 });
+
+const MAX_ZIP_CHUNK_LENGTH = 250_000; // chars of base64 (~187 KB) per mutation
+
+/**
+ * Begin replacing the stored project source ZIP. Admin-only. Wipes the old
+ * chunks/meta and records the new file's info; the caller then uploads each
+ * base64 chunk with `updateProjectZipChunk`.
+ */
+export const updateProjectZipStart = mutation({
+  args: {
+    token: v.string(),
+    fileName: v.string(),
+    size: v.number(),
+    chunkCount: v.number(),
+  },
+  handler: async (ctx, { token, fileName, size, chunkCount }) => {
+    await requireAdmin(ctx, token);
+
+    const oldChunks = await ctx.db.query("projectZipChunks").collect();
+    for (const chunk of oldChunks) await ctx.db.delete(chunk._id);
+    const oldMeta = await ctx.db.query("projectZipMeta").first();
+    if (oldMeta) await ctx.db.delete(oldMeta._id);
+
+    await ctx.db.insert("projectZipMeta", {
+      fileName,
+      size,
+      updatedAt: Date.now(),
+      chunkCount,
+    });
+  },
+});
+
+/** Store one base64 chunk of the project ZIP (admin-only). */
+export const updateProjectZipChunk = mutation({
+  args: { token: v.string(), index: v.number(), data: v.string() },
+  handler: async (ctx, { token, index, data }) => {
+    await requireAdmin(ctx, token);
+    if (data.length > MAX_ZIP_CHUNK_LENGTH) {
+      throw new Error("Chunk too large");
+    }
+    await ctx.db.insert("projectZipChunks", { index, data });
+  },
+});
+
+/** Meta info for the stored project ZIP. Admin-only; null when none stored. */
+export const getProjectZip = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const session = await requireAdmin(ctx, token).catch(() => null);
+    if (!session) return null;
+
+    const meta = await ctx.db.query("projectZipMeta").first();
+    if (!meta) return null;
+    return {
+      fileName: meta.fileName,
+      size: meta.size,
+      updatedAt: meta.updatedAt,
+      chunkCount: meta.chunkCount,
+    };
+  },
+});
+
+/**
+ * One base64 chunk of the stored project ZIP (admin-only). Implemented as a
+ * mutation so the client can fetch it imperatively during download (queries
+ * can only be subscribed via useQuery).
+ */
+export const getProjectZipChunk = mutation({
+  args: { token: v.string(), index: v.number() },
+  handler: async (ctx, { token, index }) => {
+    const session = await requireAdmin(ctx, token).catch(() => null);
+    if (!session) return null;
+
+    const chunk = await ctx.db
+      .query("projectZipChunks")
+      .withIndex("by_index", (q) => q.eq("index", index))
+      .first();
+    return chunk?.data ?? null;
+  },
+});

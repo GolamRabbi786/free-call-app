@@ -67,6 +67,9 @@ export function useCall() {
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  // Tracks whether the callee's media acquisition attempt has finished, so
+  // the offer handler can wait for it before answering (see below).
+  const localMediaAttemptRef = useRef({ attempted: false });
   const sessionRef = useRef<ActiveCall | null>(null);
   const appliedSignalsRef = useRef<Set<string>>(new Set());
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -161,6 +164,16 @@ export function useCall() {
       // Wait until the callee actually accepts before answering.
       if (live.status !== "active") return;
       const pc = getOrCreatePC(live);
+      // IMPORTANT: the callee's local mic/camera tracks must be added to the
+      // connection BEFORE createAnswer, otherwise the answer's SDP negotiates
+      // no audio/video and the caller hears nothing / sees no video. Media
+      // acquisition is async, so wait for it (with a timeout) first.
+      if (!localStreamRef.current) {
+        const deadline = Date.now() + 10_000;
+        while (!localMediaAttemptRef.current.attempted && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+        }
+      }
       await pc.setRemoteDescription({ type: "offer", sdp: payload.sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -293,11 +306,14 @@ export function useCall() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?._id, myId]);
 
-  // Callee: acquire media once the call is accepted.
+  // Callee: acquire media once the call is accepted, and flag when the
+  // attempt finishes so the offer handler can answer only after our tracks
+  // are on the connection (fixes one-way audio + missing callee video).
   useEffect(() => {
     if (!session || session.status !== "active") return;
     if (session.calleeId !== myId || !myId) return;
     if (localStreamRef.current) return;
+    localMediaAttemptRef.current = { attempted: false };
     let cancelled = false;
 
     (async () => {
@@ -308,16 +324,21 @@ export function useCall() {
       }
       if (localStreamRef.current) {
         stream?.getTracks().forEach((t) => t.stop());
+        localMediaAttemptRef.current = { attempted: true };
         return;
       }
       const live = sessionRef.current;
-      if (!live) return;
+      if (!live) {
+        localMediaAttemptRef.current = { attempted: true };
+        return;
+      }
       const pc = getOrCreatePC(live);
       if (stream) {
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         localStreamRef.current = stream;
         setLocalStream(stream);
       }
+      localMediaAttemptRef.current = { attempted: true };
     })();
 
     return () => {

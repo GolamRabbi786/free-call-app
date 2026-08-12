@@ -4,17 +4,20 @@ import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   Activity,
+  Archive,
+  Download,
   Loader2,
   LogOut,
   MessageSquare,
   Phone,
   ShieldCheck,
   Trash2,
+  Upload,
   UserPlus,
   Users,
   Video,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AppBackground } from "@/components/AppBackground";
@@ -25,6 +28,27 @@ import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 
 const TOKEN_KEY = "freecall_admin_token";
+
+// Max chars of base64 per ZIP chunk mutation call (~187 KB each).
+const MAX_ZIP_CHUNK = 250_000;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.readAsDataURL(file);
+  });
+}
 
 type Stats = {
   totalUsers: number;
@@ -165,8 +189,78 @@ export default function AdminPage() {
   const login = useMutation(api.admin.login);
   const logout = useMutation(api.admin.logout);
   const removeUser = useMutation(api.admin.removeUser);
+  const updateZipStart = useMutation(api.admin.updateProjectZipStart);
+  const updateZipChunk = useMutation(api.admin.updateProjectZipChunk);
+  const getZipChunk = useMutation(api.admin.getProjectZipChunk);
 
   const stats = useQuery(api.admin.stats, token ? { token } : "skip");
+  const zipMeta = useQuery(api.admin.getProjectZip, token ? { token } : "skip");
+
+  const [uploadingZip, setUploadingZip] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
+  const zipInputRef = useRef<HTMLInputElement>(null);
+
+  const handleZipFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !token) return;
+    setUploadingZip(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const chunks: string[] = [];
+      for (let i = 0; i < base64.length; i += MAX_ZIP_CHUNK) {
+        chunks.push(base64.slice(i, i + MAX_ZIP_CHUNK));
+      }
+      await updateZipStart({
+        token,
+        fileName: file.name,
+        size: file.size,
+        chunkCount: chunks.length,
+      });
+      for (let i = 0; i < chunks.length; i++) {
+        await updateZipChunk({ token, index: i, data: chunks[i] });
+      }
+      toast.success("Project ZIP stored — only admins can download it");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not store the ZIP",
+      );
+    } finally {
+      setUploadingZip(false);
+      if (zipInputRef.current) zipInputRef.current.value = "";
+    }
+  };
+
+  const handleZipDownload = async () => {
+    if (!zipMeta || !token) return;
+    setDownloadingZip(true);
+    try {
+      const parts: string[] = [];
+      for (let i = 0; i < zipMeta.chunkCount; i++) {
+        const data = await getZipChunk({ token, index: i });
+        if (data === null) throw new Error("ZIP data is missing — re-upload it");
+        parts.push(data);
+      }
+      const bytes = Uint8Array.from(atob(parts.join("")), (char) =>
+        char.charCodeAt(0),
+      );
+      const blob = new Blob([bytes], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = zipMeta.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      toast.success("Download started");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not download the ZIP",
+      );
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
 
   // Invalid / expired token → back to the login form.
   useEffect(() => {
@@ -275,6 +369,75 @@ export default function AdminPage() {
           </div>
         ) : data === null ? null : (
           <>
+            {/* project ZIP (admin-only download) */}
+            <div className="glass mt-5 rounded-3xl p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
+                    <Archive className="size-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-slate-800">
+                      Project source ZIP
+                    </h2>
+                    <p className="truncate text-[11px] text-slate-400">
+                      {zipMeta
+                        ? `${zipMeta.fileName} · ${formatBytes(zipMeta.size)}`
+                        : "Nothing stored yet — upload the current project ZIP so only admins can download it."}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={zipInputRef}
+                    type="file"
+                    accept=".zip,application/zip"
+                    className="hidden"
+                    onChange={(e) => void handleZipFile(e.target.files)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full text-slate-600 hover:bg-white/70"
+                    disabled={uploadingZip}
+                    onClick={() => zipInputRef.current?.click()}
+                  >
+                    {uploadingZip ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Upload className="size-4" />
+                    )}
+                    {uploadingZip
+                      ? "Storing…"
+                      : zipMeta
+                        ? "Replace ZIP"
+                        : "Upload ZIP"}
+                  </Button>
+                  {zipMeta && (
+                    <Button
+                      type="button"
+                      className="btn-gradient rounded-full text-white shadow-md"
+                      disabled={downloadingZip}
+                      onClick={() => void handleZipDownload()}
+                    >
+                      {downloadingZip ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Download className="size-4" />
+                      )}
+                      {downloadingZip ? "Preparing…" : "Download ZIP"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {zipMeta && (
+                <p className="mt-2 text-[10px] text-slate-400">
+                  Stored {format(zipMeta.updatedAt, "MMM d · h:mm a")} · only
+                  visible to the admin panel
+                </p>
+              )}
+            </div>
+
             {/* stat cards */}
             <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
               <StatCard
