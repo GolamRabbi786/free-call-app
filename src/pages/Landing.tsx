@@ -2,21 +2,28 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   BadgeCheck,
+  CheckCircle2,
+  Chrome,
+  Download,
   MessageSquareText,
   MicOff,
+  Monitor,
   Phone,
   PhoneOff,
   Radio,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   Video,
   Wifi,
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { AppBackground } from "@/components/AppBackground";
 import { Button } from "@/components/ui/button";
+import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import { cn } from "@/lib/utils";
 
 const AUTH_CTA = `/auth?returnTo=${encodeURIComponent("/dashboard")}`;
@@ -89,6 +96,9 @@ function Navbar() {
           <a href="#faq" className="transition-colors hover:text-slate-900">
             FAQ
           </a>
+          <a href="#download" className="transition-colors hover:text-slate-900">
+            Download
+          </a>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -155,13 +165,13 @@ function HeroMock() {
             </div>
             <div className="flex flex-1 flex-col gap-2 py-4">
               <div className="max-w-[80%] self-start rounded-2xl rounded-bl-md bg-white/80 px-3 py-1.5 text-[11px] text-slate-700 shadow-sm">
-                ভাই, আজ রাতে কি করবো? 😄
+                Bro, what are we up to tonight? 😄
               </div>
               <div className="max-w-[80%] self-end rounded-2xl rounded-br-md bg-gradient-to-br from-sky-500 to-indigo-500 px-3 py-1.5 text-[11px] text-white shadow-sm">
-                চল, ভিডিও কল করি! 🎥
+                Let&apos;s do a video call! 🎥
               </div>
               <div className="max-w-[80%] self-start rounded-2xl rounded-bl-md bg-white/80 px-3 py-1.5 text-[11px] text-slate-700 shadow-sm">
-                হ্যাঁ! এখনই শুরু করো
+                Yes! Let&apos;s start now
               </div>
             </div>
             <div className="glass-soft flex items-center gap-2 rounded-full p-1.5 pl-3">
@@ -243,7 +253,7 @@ function Hero() {
         </h1>
 
         <p className="mt-4 text-lg font-medium text-indigo-700/90">
-          ফ্রি ভয়েস কল, ভিডিও কল আর চ্যাট — কোনো জ্যামলা ছাড়াই।
+          Free voice calls, video calls and chat — no hassle, no charges.
         </p>
         <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
           Free Call gives you unlimited voice calls, HD video calls and instant
@@ -505,7 +515,7 @@ const FAQS = [
   },
   {
     q: "Do I need to install anything?",
-    a: "No. Free Call runs entirely in your browser. No app stores, no downloads, no updates.",
+    a: "No — Free Call runs entirely in your browser. Prefer an app? You can install it to your home screen in a couple of taps, and it keeps working offline.",
   },
   {
     q: "How do video calls connect?",
@@ -548,6 +558,120 @@ function Faq() {
   );
 }
 
+/* ------------------------------- Download app ----------------------------- */
+
+const INSTALL_STEPS = [
+  {
+    icon: Smartphone,
+    title: "Android",
+    body: "Open Free Call in Chrome, tap the ⋮ menu and choose \"Install app\" (or \"Add to Home screen\").",
+  },
+  {
+    icon: Chrome,
+    title: "iPhone / iPad",
+    body: "Open Free Call in Safari, tap Share, then \"Add to Home Screen\".",
+  },
+  {
+    icon: Monitor,
+    title: "Desktop",
+    body: "Click the install icon in your browser's address bar — Chrome, Edge and Safari all support it.",
+  },
+];
+
+function DownloadApp() {
+  const { canInstall, install } = useInstallPrompt();
+  const [installing, setInstalling] = useState(false);
+
+  const handleInstall = async () => {
+    setInstalling(true);
+    try {
+      await install();
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  return (
+    <section id="download" className="relative mx-auto max-w-6xl px-4 py-20">
+      <Reveal className="mx-auto max-w-2xl text-center">
+        <span className="glass-soft rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-700">
+          Get the app
+        </span>
+        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          Download Free Call on your phone
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+          Install it like a native app — one tap from your browser, no app store,
+          no fees. Calls and chat stay free forever.
+        </p>
+      </Reveal>
+
+      <Reveal delay={0.1}>
+        <div className="glass-strong relative mx-auto mt-12 max-w-3xl overflow-hidden rounded-[2rem] p-6 sm:p-10">
+          <div className="pointer-events-none absolute -top-20 -right-10 h-48 w-48 rounded-full bg-sky-300/40 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-indigo-300/40 blur-3xl" />
+
+          <div className="relative flex flex-col items-center text-center">
+            {canInstall ? (
+              <>
+                <span className="btn-gradient flex size-14 items-center justify-center rounded-2xl text-white shadow-lg">
+                  <Download className="size-7" />
+                </span>
+                <h3 className="mt-4 text-xl font-bold text-slate-800">
+                  Install the app in one tap
+                </h3>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                  Adds Free Call to your home screen with its own app icon and
+                  window — just like a native app.
+                </p>
+                <Button
+                  type="button"
+                  size="lg"
+                  disabled={installing}
+                  onClick={() => void handleInstall()}
+                  className="btn-gradient mt-6 h-12 rounded-full px-8 text-white shadow-lg"
+                >
+                  <Download className="size-4" />
+                  {installing ? "Installing…" : "Download the app"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-slate-700">
+                  Your browser doesn&apos;t offer a one-tap install here — but
+                  it&apos;s still just two taps:
+                </p>
+                <div className="mt-6 grid w-full gap-4 sm:grid-cols-3">
+                  {INSTALL_STEPS.map((step) => (
+                    <div
+                      key={step.title}
+                      className="glass-soft rounded-2xl p-4 text-left"
+                    >
+                      <span className="flex size-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
+                        <step.icon className="size-4" />
+                      </span>
+                      <p className="mt-2.5 text-xs font-bold text-slate-800">
+                        {step.title}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                        {step.body}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-6 flex items-center gap-1.5 text-xs text-slate-400">
+                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                  Works offline once installed — calls and chat stay free.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </Reveal>
+    </section>
+  );
+}
+
 /* ------------------------------ Final CTA band ---------------------------- */
 
 function FinalCta() {
@@ -566,7 +690,7 @@ function FinalCta() {
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
               Join Free Call today and start making free calls, video calls and
-              chats — জ্যামলা ছাড়াই।
+              chats — zero hassle, forever free.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button
@@ -647,6 +771,7 @@ export default function Landing() {
         <HowItWorks />
         <Testimonials />
         <Faq />
+        <DownloadApp />
         <FinalCta />
       </main>
       <Footer />
