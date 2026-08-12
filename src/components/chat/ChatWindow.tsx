@@ -2,7 +2,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
-import { MessageSquarePlus, Phone, Send, Video } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Phone, Send, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,12 +22,14 @@ export function ChatWindow({
   isOnline,
   inCall,
   onCall,
+  onBack,
 }: {
   otherUser: OtherUser;
   conversationId: Id<"conversations"> | null;
   isOnline: boolean;
   inCall: boolean;
   onCall: (kind: "video" | "audio") => void;
+  onBack?: () => void;
 }) {
   const { user } = useAuth();
   const myId = user?._id;
@@ -84,6 +86,19 @@ export function ChatWindow({
     <div className="flex h-full min-h-0 flex-col">
       {/* header */}
       <div className="glass-soft flex items-center gap-3 border-b border-white/60 px-4 py-3">
+        {onBack && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-ml-1 rounded-full text-slate-600 hover:bg-white/70 hover:text-slate-800 md:hidden"
+            onClick={onBack}
+            title="Back to chats"
+            aria-label="Back to chats"
+          >
+            <ArrowLeft className="size-5" />
+          </Button>
+        )}
         <UserAvatar
           name={otherUser.name}
           image={otherUser.image}

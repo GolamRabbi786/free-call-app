@@ -102,8 +102,7 @@ function ControlButton({
   );
 }
 
-export function CallOverlay() {
-  const call = useCall();
+export function CallOverlay({ call }: { call: ReturnType<typeof useCall> }) {
   const { session, localStream, remoteStream, micOn, camOn, connectionState } =
     call;
   const timer = useCallTimer(session?.startedAt);

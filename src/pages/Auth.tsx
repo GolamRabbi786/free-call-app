@@ -16,7 +16,8 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import logo from "@/assets/logo.svg";
-import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
+import { AppBackground } from "@/components/AppBackground";
+import { ArrowRight, Loader2, Mail, UserX, Video } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -110,29 +111,31 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="app-bg min-h-screen flex flex-col">
+      <AppBackground />
 
-      
       {/* Auth Content */}
       <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center justify-center h-full flex-col">
-        <Card className="min-w-[350px] pb-0 border shadow-md">
+        <div className="flex items-center justify-center h-full flex-col px-4">
+        <Card className="glass-strong min-w-[350px] pb-0 rounded-3xl border-white/70 shadow-none bg-transparent">
           {step === "signIn" ? (
             <>
               <CardHeader className="text-center">
-              <div className="flex justify-center">
-                    <img
-                      src={logo}
-                      alt="Lock Icon"
-                      width={64}
-                      height={64}
-                      className="rounded-lg mb-4 mt-4 cursor-pointer"
-                      onClick={() => navigate("/")}
-                    />
-                  </div>
-                <CardTitle className="text-xl">Get Started</CardTitle>
-                <CardDescription>
-                  Enter your email to log in or sign up
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    aria-label="Back to home"
+                    className="btn-gradient flex size-14 items-center justify-center rounded-2xl shadow-lg transition-transform hover:scale-105"
+                  >
+                    <Video className="size-7 text-white" />
+                  </button>
+                </div>
+                <CardTitle className="mt-4 text-2xl font-bold text-slate-900">
+                  Welcome to Milon
+                </CardTitle>
+                <CardDescription className="text-slate-500">
+                  Enter your email to log in or sign up — free calls &amp; chat
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleEmailSubmit}>
@@ -170,10 +173,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <div className="mt-4">
                     <div className="relative">
                       <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
+                        <span className="w-full border-t border-white/70" />
                       </div>
                       <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-background px-2 text-muted-foreground">
+                        <span className="bg-white/70 px-2 text-slate-500">
                           Or
                         </span>
                       </div>
@@ -277,7 +280,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </>
           )}
 
-          <div className="py-4 px-6 text-xs text-center text-muted-foreground bg-muted border-t rounded-b-lg">
+          <div className="glass-soft py-4 px-6 text-xs text-center text-slate-500 rounded-b-3xl border-t border-white/60">
             Secured by{" "}
             <a
               href="https://freebuff.com"
