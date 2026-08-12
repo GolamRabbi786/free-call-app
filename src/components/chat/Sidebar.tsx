@@ -3,6 +3,8 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { format, isToday, isYesterday } from "date-fns";
 import {
+  Bell,
+  BellRing,
   Camera,
   Loader2,
   LogOut,
@@ -32,6 +34,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import logo from "@/assets/logo.svg";
 import { describeCallMessage } from "@/lib/call-history";
+import {
+  notificationPermission,
+  requestNotificationPermission,
+} from "@/lib/notify";
 import { compressImage, uploadToConvex } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -81,6 +87,30 @@ export function Sidebar({
   const [savingName, setSavingName] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [notifPerm, setNotifPerm] = useState(() => notificationPermission());
+
+  const enableNotifications = async () => {
+    const result = await requestNotificationPermission();
+    setNotifPerm(result);
+    if (result === "granted") {
+      toast.success("Notifications on — you'll hear about calls & messages");
+    } else if (result === "denied") {
+      toast.error(
+        "Notifications are blocked in your browser — allow them in site settings",
+      );
+    } else if (result === "default") {
+      toast.info(
+        "Nothing changed — click the bell again and choose Allow to get alerts",
+      );
+    }
+  };
+
+  const notifTitle =
+    notifPerm === "granted"
+      ? "Notifications on — click to manage"
+      : notifPerm === "denied"
+        ? "Notifications blocked — allow them in browser site settings"
+        : "Turn on call & message notifications";
 
   // create-group dialog
   const [groupOpen, setGroupOpen] = useState(false);
@@ -225,16 +255,32 @@ export function Sidebar({
           </p>
           <p className="text-[11px] text-slate-500">Voice, video &amp; chat</p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700"
-          onClick={handleSignOut}
-          title="Sign out"
-        >
-          <LogOut className="size-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700"
+            onClick={() => void enableNotifications()}
+            title={notifTitle}
+          >
+            {notifPerm === "granted" ? (
+              <BellRing className="size-4 text-emerald-500" />
+            ) : (
+              <Bell className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700"
+            onClick={handleSignOut}
+            title="Sign out"
+          >
+            <LogOut className="size-4" />
+          </Button>
+        </div>
       </div>
 
       {/* my profile */}

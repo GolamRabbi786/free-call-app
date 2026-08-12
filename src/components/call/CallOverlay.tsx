@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useCall } from "@/hooks/use-call";
 import type { useGroupCall } from "@/hooks/use-group-call";
 import { useAuth } from "@/hooks/use-auth";
+import { attachMedia } from "@/lib/webrtc";
 import { UserAvatar } from "@/components/UserAvatar";
 
 function useCallTimer(startedAt?: number) {
@@ -117,17 +118,20 @@ function GroupCallScreen({
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
 
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (localVideoRef.current) {
+      attachMedia(localVideoRef.current, localStream);
     }
   }, [localStream]);
 
   useEffect(() => {
     for (const [peerId, stream] of Object.entries(remoteStreams)) {
       const el = videoRefs.current[peerId];
-      if (el && el.srcObject !== stream) el.srcObject = stream;
+      if (el) attachMedia(el, stream);
+      const audioEl = audioRefs.current[peerId];
+      if (audioEl) attachMedia(audioEl, stream);
     }
   }, [remoteStreams]);
 
@@ -236,6 +240,19 @@ function GroupCallScreen({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-8 px-6 pt-16">
+          {/* remote audio — voice calls have no video element, so play each
+              participant's stream through a hidden audio element instead */}
+          {Object.keys(remoteStreams).map((peerId) => (
+            <audio
+              key={peerId}
+              ref={(el) => {
+                audioRefs.current[peerId] = el;
+              }}
+              autoPlay
+              playsInline
+              className="hidden"
+            />
+          ))}
           <div className="flex flex-wrap items-center justify-center gap-6">
             {participants.map((participantId) => {
               const member = memberOf(participantId);
@@ -331,17 +348,21 @@ export function CallOverlay({
   const timer = useCallTimer(session?.startedAt);
 
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
+    if (remoteVideoRef.current) {
+      attachMedia(remoteVideoRef.current, remoteStream);
+    }
+    if (remoteAudioRef.current) {
+      attachMedia(remoteAudioRef.current, remoteStream);
     }
   }, [remoteStream]);
 
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (localVideoRef.current) {
+      attachMedia(localVideoRef.current, localStream);
     }
   }, [localStream]);
 
@@ -539,6 +560,8 @@ export function CallOverlay({
           return (
             /* audio-only call */
             <div className="relative flex h-full flex-col items-center justify-center gap-10 px-6">
+              {/* hidden element that plays the remote side's voice */}
+              <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
               <div className="flex items-center gap-8 sm:gap-12">
                 <div className="flex flex-col items-center gap-3">
                   <motion.div

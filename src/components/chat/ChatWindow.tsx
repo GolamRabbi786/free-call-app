@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { setActiveChat } from "@/lib/active-chat";
 import { describeCallMessage } from "@/lib/call-history";
 import { compressImage, uploadToConvex } from "@/lib/upload";
 import { cn } from "@/lib/utils";
@@ -101,6 +102,18 @@ export function ChatWindow({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages?.length, conversationId, groupId]);
+
+  // Tell the global notification watcher which chat is open, so it doesn't
+  // alert for a message we're already looking at.
+  useEffect(() => {
+    const key = groupId
+      ? `group:${groupId}`
+      : conversationId
+        ? `dm:${conversationId}`
+        : null;
+    setActiveChat(key);
+    return () => setActiveChat(null);
+  }, [conversationId, groupId]);
 
   const submit = async () => {
     const body = draft.trim();

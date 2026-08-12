@@ -28,6 +28,34 @@ export function createPeerConnection(): RTCPeerConnection {
   return new RTCPeerConnection(RTC_CONFIG);
 }
 
+/**
+ * Attach a MediaStream to a media element and keep playback going.
+ *
+ * Browsers (especially iOS Safari) can block audio/video autoplay until a
+ * user gesture. We start playback immediately and also resume it on the next
+ * pointer interaction, so the remote side's voice is always audible.
+ */
+export function attachMedia(el: HTMLMediaElement, stream: MediaStream | null) {
+  if (!stream) {
+    el.pause();
+    el.srcObject = null;
+    return;
+  }
+  if (el.srcObject !== stream) el.srcObject = stream;
+  const play = () => {
+    el.play().catch(() => {
+      /* autoplay blocked until a gesture — the pointer handler retries */
+    });
+  };
+  play();
+  const resumeKey = "__freecall_resume";
+  const self = el as HTMLMediaElement & { [resumeKey]?: boolean };
+  if (!self[resumeKey]) {
+    self[resumeKey] = true;
+    el.addEventListener("pointerdown", play);
+  }
+}
+
 /** Request the local camera/mic, degrading gracefully from video to audio-only. */
 export async function acquireMedia(
   kind: "video" | "audio",
