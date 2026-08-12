@@ -57,8 +57,20 @@ export type SignalPayload =
   | { type: "answer"; sdp: string }
   | { type: "ice"; candidate: RTCIceCandidateInit };
 
+// Short-lived TURN (relay) servers fetched from the backend once the user
+// signs in — lets calls connect even behind symmetric/restrictive NATs.
+let turnServers: RTCIceServer[] = [];
+
+/** Store the TURN servers fetched from the backend (safe to call repeatedly). */
+export function setTurnServers(servers: RTCIceServer[]) {
+  turnServers = servers.length > 0 ? servers : turnServers;
+}
+
 export function createPeerConnection(): RTCPeerConnection {
-  return new RTCPeerConnection(RTC_CONFIG);
+  return new RTCPeerConnection({
+    ...RTC_CONFIG,
+    iceServers: [...(RTC_CONFIG.iceServers ?? []), ...turnServers],
+  });
 }
 
 /**

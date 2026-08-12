@@ -1,12 +1,13 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   acquireMedia,
   createPeerConnection,
   ensureDataChannel,
+  setTurnServers,
   type SignalPayload,
 } from "@/lib/webrtc";
 import { useAuth } from "./use-auth";
@@ -50,6 +51,21 @@ export function useGroupCall() {
     api.groupCalls.listSignals,
     session ? { sessionId: session._id } : "skip",
   );
+
+  const getIceServers = useAction(api.turn.getIceServers);
+
+  // Load TURN relay servers once so mesh connections can traverse restrictive
+  // NATs (see use-call.ts for details).
+  useEffect(() => {
+    let cancelled = false;
+    void getIceServers().then((servers) => {
+      if (cancelled || !servers) return;
+      setTurnServers(servers as RTCIceServer[]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [getIceServers]);
 
   const startGroupCallMutation = useMutation(api.groupCalls.startGroupCall);
   const endGroupCallMutation = useMutation(api.groupCalls.endGroupCall);

@@ -1,12 +1,13 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   acquireMedia,
   createPeerConnection,
   ensureDataChannel,
+  setTurnServers,
   type SignalPayload,
 } from "@/lib/webrtc";
 import { useAuth } from "./use-auth";
@@ -58,6 +59,22 @@ export function useCall() {
     api.calls.listSignals,
     session ? { sessionId: session._id } : "skip",
   );
+
+  const getIceServers = useAction(api.turn.getIceServers);
+
+  // Load TURN relay servers once so peer connections can traverse restrictive
+  // NATs. Runs on mount; if a call starts before it resolves, STUN/host still
+  // attempt and the next call gets the relay.
+  useEffect(() => {
+    let cancelled = false;
+    void getIceServers().then((servers) => {
+      if (cancelled || !servers) return;
+      setTurnServers(servers as RTCIceServer[]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [getIceServers]);
 
   const startCallMutation = useMutation(api.calls.startCall);
   const acceptCallMutation = useMutation(api.calls.acceptCall);
