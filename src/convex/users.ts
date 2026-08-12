@@ -48,6 +48,20 @@ export const updateProfile = mutation({
   },
 });
 
+/** Set the signed-in user's profile picture from an uploaded file. */
+export const updateProfileImage = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const url = await ctx.storage.getUrl(storageId);
+    if (!url) throw new Error("Could not load the uploaded image");
+    await ctx.db.patch(user._id, { image: url });
+    return url;
+  },
+});
+
 /**
  * Every user except the current one, with their online status derived from
  * the presence table. Online users first, then alphabetical.

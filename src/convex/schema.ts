@@ -55,7 +55,10 @@ const schema = defineSchema(
       .index("by_userB", ["userB"]),
 
     messages: defineTable({
-      conversationId: v.id("conversations"),
+      // A direct (1:1) conversation, when this message lives in one.
+      conversationId: v.optional(v.id("conversations")),
+      // A group chat, when this message lives in one.
+      groupId: v.optional(v.id("groups")),
       senderId: v.id("users"),
       body: v.string(),
       // "text" (default) or "call" — a call-history entry rendered in the chat.
@@ -64,9 +67,58 @@ const schema = defineSchema(
       callStatus: v.optional(callStatusValidator),
       callDurationMs: v.optional(v.number()),
       callSessionId: v.optional(v.id("callSessions")),
+      callGroupSessionId: v.optional(v.id("groupCallSessions")),
+      // A shared file / photo / video attached to the message.
+      attachment: v.optional(
+        v.object({
+          storageId: v.id("_storage"),
+          url: v.string(),
+          name: v.string(),
+          type: v.string(),
+          size: v.number(),
+        }),
+      ),
     })
       .index("by_conversation", ["conversationId"])
-      .index("by_callSession", ["callSessionId"]),
+      .index("by_group", ["groupId"])
+      .index("by_callSession", ["callSessionId"])
+      .index("by_groupCallSession", ["callGroupSessionId"]),
+
+    // Group chats. Membership lives in `groupMembers`.
+    groups: defineTable({
+      name: v.string(),
+      createdBy: v.id("users"),
+      image: v.optional(v.string()),
+    }).index("by_createdBy", ["createdBy"]),
+
+    groupMembers: defineTable({
+      groupId: v.id("groups"),
+      userId: v.id("users"),
+      addedBy: v.id("users"),
+    })
+      .index("by_group", ["groupId"])
+      .index("by_user", ["userId"]),
+
+    // Group (multi-party) calls. Participants are a static list from the
+    // group at call start; media is connected peer-to-peer (mesh) between
+    // every pair of participants.
+    groupCallSessions: defineTable({
+      groupId: v.id("groups"),
+      initiatorId: v.id("users"),
+      kind: callKindValidator,
+      status: v.union(v.literal("active"), v.literal("ended")),
+      participantIds: v.array(v.id("users")),
+      startedAt: v.optional(v.number()),
+      endedAt: v.optional(v.number()),
+    }).index("by_group", ["groupId"]),
+
+    // Targeted WebRTC signaling for a group call (from -> to).
+    groupCallSignals: defineTable({
+      sessionId: v.id("groupCallSessions"),
+      from: v.id("users"),
+      to: v.id("users"),
+      payload: v.any(),
+    }).index("by_session", ["sessionId"]),
 
     // A single call between two users, with a lifecycle:
     // ringing -> active -> ended | declined | missed

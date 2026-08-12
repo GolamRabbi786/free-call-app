@@ -3,18 +3,22 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { format, isToday, isYesterday } from "date-fns";
 import {
+  Camera,
+  Loader2,
   LogOut,
   Pencil,
   Phone,
   Search,
+  Users,
   Video,
   Wifi,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -28,10 +32,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import logo from "@/assets/logo.svg";
 import { describeCallMessage } from "@/lib/call-history";
+import { compressImage, uploadToConvex } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 
-export type SidebarTab = "chats" | "people";
+export type SidebarTab = "chats" | "people" | "groups";
 
 function conversationTime(ts?: number): string {
   if (!ts) return "";
@@ -43,14 +48,18 @@ function conversationTime(ts?: number): string {
 export function Sidebar({
   activeConversationId,
   activeOtherUserId,
+  activeGroupId,
   onSelectUser,
+  onSelectGroup,
   onStartCall,
   tab,
   onTabChange,
 }: {
   activeConversationId: Id<"conversations"> | null;
   activeOtherUserId: Id<"users"> | null;
+  activeGroupId: Id<"groups"> | null;
   onSelectUser: (userId: Id<"users">) => void;
+  onSelectGroup: (groupId: Id<"groups">) => void;
   onStartCall: (userId: Id<"users">, kind: "video" | "audio") => void;
   tab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
@@ -58,14 +67,28 @@ export function Sidebar({
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const conversations = useQuery(api.conversations.listForMe);
+  const groups = useQuery(api.groups.listForMe);
   const people = useQuery(api.users.listPeople);
   const onlineUsers = useQuery(api.presence.onlineUsers);
   const updateProfile = useMutation(api.users.updateProfile);
+  const updateProfileImage = useMutation(api.users.updateProfileImage);
+  const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
+  const createGroup = useMutation(api.groups.create);
 
   const [query, setQuery] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // create-group dialog
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(
+    new Set(),
+  );
+  const [creatingGroup, setCreatingGroup] = useState(false);
 
   const onlineMap = useMemo(() => {
     const map = new Map<string, { online: boolean; inCall: boolean }>();
@@ -81,6 +104,13 @@ export function Sidebar({
     if (!q) return list;
     return list.filter((p) => (p.name ?? "").toLowerCase().includes(q));
   }, [people, query]);
+
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = groups ?? [];
+    if (!q) return list;
+    return list.filter((g) => g.group.name.toLowerCase().includes(q));
+  }, [groups, query]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -105,6 +135,76 @@ export function Sidebar({
     } finally {
       setSavingName(false);
     }
+  };
+
+  const handlePhoto = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const processed = await compressImage(file, 800, 0.85);
+      const storageId = await uploadToConvex(processed, () =>
+        generateUploadUrl(),
+      );
+      await updateProfileImage({ storageId: storageId as Id<"_storage"> });
+      toast.success("Profile picture updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not update photo",
+      );
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
+  const toggleMember = (userId: string, checked: boolean) => {
+    setSelectedMembers((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  };
+
+  const handleCreateGroup = async () => {
+    const name = groupName.trim();
+    if (!name || selectedMembers.size === 0 || creatingGroup) return;
+    setCreatingGroup(true);
+    try {
+      const groupId = await createGroup({
+        name,
+        memberIds: [...selectedMembers] as Id<"users">[],
+      });
+      setGroupOpen(false);
+      setGroupName("");
+      setSelectedMembers(new Set());
+      onSelectGroup(groupId);
+      toast.success("Group created");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not create group",
+      );
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  const groupPreview = (lastMessage: {
+    kind?: string;
+    senderId: string;
+    body: string;
+    callKind?: string;
+    callStatus?: string;
+    callDurationMs?: number;
+  } | null | undefined) => {
+    if (!lastMessage) return "No messages yet";
+    if (lastMessage.kind === "call") {
+      return `${lastMessage.senderId === user?._id ? "You: " : ""}${describeCallMessage(lastMessage, { group: true })}`;
+    }
+    return lastMessage.senderId === user?._id
+      ? `You: ${lastMessage.body}`
+      : lastMessage.body;
   };
 
   return (
@@ -139,12 +239,35 @@ export function Sidebar({
 
       {/* my profile */}
       <div className="mx-4 mt-1 flex items-center gap-3 rounded-2xl border border-white/60 bg-white/45 px-3 py-2.5">
-        <UserAvatar
-          name={user?.name}
-          image={user?.image}
-          id={user?._id}
-          className="size-9"
-        />
+        <div className="relative shrink-0">
+          <UserAvatar
+            name={user?.name}
+            image={user?.image}
+            id={user?._id}
+            className="size-9"
+          />
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            title="Change profile picture"
+            aria-label="Change profile picture"
+            disabled={uploadingPhoto}
+            className="btn-gradient absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full text-white shadow ring-2 ring-white transition-transform hover:scale-110 disabled:opacity-70"
+          >
+            {uploadingPhoto ? (
+              <Loader2 className="size-2.5 animate-spin" />
+            ) : (
+              <Camera className="size-2.5" />
+            )}
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void handlePhoto(e.target.files)}
+          />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-800">
             {user?.name ?? "Guest"}
@@ -172,7 +295,9 @@ export function Sidebar({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search people…"
+            placeholder={
+              tab === "groups" ? "Search groups…" : "Search people…"
+            }
             className="glass-soft rounded-xl border-white/70 pl-9 text-sm"
           />
         </div>
@@ -190,6 +315,12 @@ export function Sidebar({
               className="flex-1 rounded-lg data-[state=active]:bg-white/80"
             >
               Chats
+            </TabsTrigger>
+            <TabsTrigger
+              value="groups"
+              className="flex-1 rounded-lg data-[state=active]:bg-white/80"
+            >
+              Groups
             </TabsTrigger>
             <TabsTrigger
               value="people"
@@ -272,6 +403,86 @@ export function Sidebar({
                   </button>
                 );
               })
+            )}
+          </div>
+        ) : tab === "groups" ? (
+          <div className="flex flex-col gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="btn-gradient mb-2 rounded-xl border-0 text-white shadow-md"
+              onClick={() => {
+                setGroupName("");
+                setSelectedMembers(new Set());
+                setGroupOpen(true);
+              }}
+            >
+              <Users className="size-4" />
+              New group
+            </Button>
+            {!groups ? (
+              <p className="px-3 py-6 text-center text-xs text-slate-400">
+                Loading…
+              </p>
+            ) : groups.length === 0 ? (
+              <p className="px-3 py-6 text-center text-xs leading-5 text-slate-400">
+                No groups yet.
+                <br />
+                Create one and call everyone together!
+              </p>
+            ) : (
+              filteredGroups.map(({ group, members, memberCount, lastMessage }) => (
+                <button
+                  key={group._id}
+                  type="button"
+                  onClick={() => onSelectGroup(group._id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors",
+                    group._id === activeGroupId
+                      ? "bg-white/80 shadow-sm ring-1 ring-white/70"
+                      : "hover:bg-white/50",
+                  )}
+                >
+                  <div className="relative shrink-0">
+                    {members.length > 0 ? (
+                      <div className="flex -space-x-2.5">
+                        {members.map((m) => (
+                          <UserAvatar
+                            key={m._id}
+                            name={m.name}
+                            image={m.image}
+                            id={m._id}
+                            className="size-9 ring-2 ring-white"
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <Avatar className="size-9 ring-2 ring-white/80">
+                        <AvatarFallback className="bg-sky-100 font-semibold text-sky-600">
+                          <Users className="size-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {group.name}
+                      </p>
+                      {lastMessage && (
+                        <span className="shrink-0 text-[10px] text-slate-400">
+                          {conversationTime(lastMessage._creationTime)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-slate-500">
+                      {lastMessage
+                        ? groupPreview(lastMessage)
+                        : `${memberCount} members`}
+                    </p>
+                  </div>
+                </button>
+              ))
             )}
           </div>
         ) : (
@@ -413,6 +624,91 @@ export function Sidebar({
               className="btn-gradient"
             >
               {savingName ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* create group dialog */}
+      <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
+        <DialogContent className="glass-strong max-w-md rounded-3xl border-white/70">
+          <DialogHeader>
+            <DialogTitle>New group</DialogTitle>
+            <DialogDescription>
+              Name the group and pick the people to add.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            placeholder="Group name (e.g. Family, Office, Friends)"
+            className="glass-soft rounded-xl border-white/70"
+            maxLength={60}
+          />
+          <div className="max-h-52 min-h-0 overflow-y-auto rounded-2xl border border-white/60 bg-white/40 p-2">
+            {!people ? (
+              <p className="px-3 py-4 text-center text-xs text-slate-400">
+                Loading people…
+              </p>
+            ) : people.length === 0 ? (
+              <p className="px-3 py-4 text-center text-xs text-slate-400">
+                No one else to add yet — sign in from another account first.
+              </p>
+            ) : (
+              people.map((person) => {
+                const checked = selectedMembers.has(person._id);
+                return (
+                  <label
+                    key={person._id}
+                    className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/70"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) =>
+                        toggleMember(person._id, value === true)
+                      }
+                    />
+                    <UserAvatar
+                      name={person.name}
+                      image={person.image}
+                      id={person._id}
+                      className="size-8"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
+                      {person.name ?? "Guest"}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px]",
+                        onlineMap.has(person._id)
+                          ? "text-emerald-600"
+                          : "text-slate-400",
+                      )}
+                    >
+                      {onlineMap.has(person._id) ? "Online" : ""}
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setGroupOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                !groupName.trim() || selectedMembers.size === 0 || creatingGroup
+              }
+              onClick={() => void handleCreateGroup()}
+              className="btn-gradient"
+            >
+              {creatingGroup ? "Creating…" : "Create group"}
             </Button>
           </DialogFooter>
         </DialogContent>

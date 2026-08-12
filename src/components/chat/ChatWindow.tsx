@@ -4,17 +4,22 @@ import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   ArrowLeft,
+  FileText,
+  Loader2,
   MessageSquarePlus,
+  Paperclip,
   Phone,
   PhoneMissed,
   Send,
   Video,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { describeCallMessage } from "@/lib/call-history";
+import { compressImage, uploadToConvex } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -24,43 +29,89 @@ type OtherUser = {
   image?: string;
 } | null;
 
+type GroupMember = { _id: string; name?: string; image?: string };
+
+type GroupData = {
+  _id: string;
+  name: string;
+  image?: string;
+  members: GroupMember[];
+} | null;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageType(type: string) {
+  return type.startsWith("image/");
+}
+
+function isVideoType(type: string) {
+  return type.startsWith("video/");
+}
+
 export function ChatWindow({
   otherUser,
+  group,
   conversationId,
+  groupId,
   isOnline,
   inCall,
   onCall,
+  onGroupCall,
   onBack,
 }: {
   otherUser: OtherUser;
+  group: GroupData;
   conversationId: Id<"conversations"> | null;
+  groupId: Id<"groups"> | null;
   isOnline: boolean;
   inCall: boolean;
   onCall: (kind: "video" | "audio") => void;
+  onGroupCall: (kind: "video" | "audio") => void;
   onBack?: () => void;
 }) {
   const { user } = useAuth();
   const myId = user?._id;
-  const messages = useQuery(
+  const isGroup = Boolean(groupId && group);
+
+  const directMessages = useQuery(
     api.messages.list,
     conversationId ? { conversationId } : "skip",
   );
+  const groupMessages = useQuery(
+    api.messages.listGroup,
+    groupId ? { groupId } : "skip",
+  );
+  const messages = conversationId ? directMessages : groupId ? groupMessages : undefined;
   const sendMessage = useMutation(api.messages.send);
+  const sendGroup = useMutation(api.messages.sendGroup);
+  const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
+  const sendAttachment = useMutation(api.messages.sendAttachment);
+  const sendGroupAttachment = useMutation(api.messages.sendGroupAttachment);
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages?.length, conversationId]);
+  }, [messages?.length, conversationId, groupId]);
 
   const submit = async () => {
     const body = draft.trim();
-    if (!body || !conversationId || sending) return;
+    if (!body || (!conversationId && !groupId) || sending) return;
     setSending(true);
     try {
-      await sendMessage({ conversationId, body });
+      if (groupId) {
+        await sendGroup({ groupId, body });
+      } else if (conversationId) {
+        await sendMessage({ conversationId, body });
+      }
       setDraft("");
     } catch {
       /* error toast handled globally? keep quiet */
@@ -69,26 +120,40 @@ export function ChatWindow({
     }
   };
 
-  if (!conversationId || !otherUser) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="glass-strong flex size-20 items-center justify-center rounded-3xl">
-          <MessageSquarePlus className="size-9 text-sky-600" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold text-slate-800">
-            Pick someone to talk to
-          </h2>
-          <p className="mx-auto mt-1 max-w-xs text-sm text-slate-500">
-            Choose a person from the People tab to start chatting, or make a
-            free video or voice call.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const handleFiles = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || (!conversationId && !groupId)) return;
+    setUploading(true);
+    try {
+      const processed = await compressImage(file);
+      const storageId = await uploadToConvex(processed, () =>
+        generateUploadUrl(),
+      );
+      const id = storageId as Id<"_storage">;
+      const meta = {
+        storageId: id,
+        name: processed.name,
+        type: processed.type,
+        size: processed.size,
+      };
+      if (groupId) {
+        await sendGroupAttachment({ groupId, ...meta });
+      } else if (conversationId) {
+        await sendAttachment({ conversationId, ...meta });
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not send the file",
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
-  const statusText = isOnline ? (inCall ? "In a call" : "Online") : "Offline";
+  const placeholder = isGroup
+    ? "Message the group…"
+    : "Type a message…";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -101,44 +166,50 @@ export function ChatWindow({
             size="icon"
             className="-ml-1 rounded-full text-slate-600 hover:bg-white/70 hover:text-slate-800 md:hidden"
             onClick={onBack}
-            title="Back to chats"
-            aria-label="Back to chats"
+            title="Back"
+            aria-label="Back"
           >
             <ArrowLeft className="size-5" />
           </Button>
         )}
         <UserAvatar
-          name={otherUser.name}
-          image={otherUser.image}
-          id={otherUser._id}
+          name={isGroup ? group?.name : otherUser?.name}
+          image={isGroup ? group?.image : otherUser?.image}
+          id={isGroup ? group?._id : otherUser?._id}
           className="size-10"
         />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-slate-800">
-            {otherUser.name ?? "Guest"}
+            {isGroup ? group?.name ?? "Group" : otherUser?.name ?? "Guest"}
           </p>
-          <p
-            className={cn(
-              "flex items-center gap-1.5 text-xs",
-              isOnline ? "text-emerald-600" : "text-slate-400",
-            )}
-          >
-            <span
+          {isGroup ? (
+            <p className="text-xs text-slate-500">
+              {group?.members.length ?? 0} members
+            </p>
+          ) : (
+            <p
               className={cn(
-                "size-1.5 rounded-full",
-                isOnline ? "bg-emerald-500" : "bg-slate-300",
+                "flex items-center gap-1.5 text-xs",
+                isOnline ? "text-emerald-600" : "text-slate-400",
               )}
-            />
-            {statusText}
-          </p>
+            >
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  isOnline ? "bg-emerald-500" : "bg-slate-300",
+                )}
+              />
+              {inCall ? "In a call" : isOnline ? "Online" : "Offline"}
+            </p>
+          )}
         </div>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="rounded-full text-sky-700 hover:bg-sky-500/10 hover:text-sky-700"
-          onClick={() => onCall("audio")}
-          title="Free voice call"
+          onClick={() => (isGroup ? onGroupCall("audio") : onCall("audio"))}
+          title={isGroup ? "Free group voice call" : "Free voice call"}
         >
           <Phone className="size-5" />
         </Button>
@@ -147,8 +218,8 @@ export function ChatWindow({
           variant="ghost"
           size="icon"
           className="rounded-full text-sky-700 hover:bg-sky-500/10 hover:text-sky-700"
-          onClick={() => onCall("video")}
-          title="Free video call"
+          onClick={() => (isGroup ? onGroupCall("video") : onCall("video"))}
+          title={isGroup ? "Free group video call" : "Free video call"}
         >
           <Video className="size-5" />
         </Button>
@@ -166,7 +237,9 @@ export function ChatWindow({
               No messages yet
             </p>
             <p className="max-w-xs text-xs text-slate-400">
-              Say hello — or skip the typing and start a free call.
+              {isGroup
+                ? "Say hello to the group — or start a free group call."
+                : "Say hello — or skip the typing and start a free call."}
             </p>
           </div>
         ) : (
@@ -201,7 +274,7 @@ export function ChatWindow({
                       ) : (
                         <Phone className="size-3.5" />
                       )}
-                      <span>{describeCallMessage(message)}</span>
+                      <span>{describeCallMessage(message, { group: isGroup })}</span>
                       <span className="text-slate-400">
                         {format(message._creationTime, "h:mm a")}
                       </span>
@@ -211,11 +284,21 @@ export function ChatWindow({
               }
 
               const mine = message.senderId === myId;
+              const senderName = isGroup
+                ? group?.members.find((m) => m._id === message.senderId)?.name
+                : undefined;
+              const attachment = message.attachment;
+
               return (
                 <div
                   key={message._id}
-                  className={cn("flex w-full", mine ? "justify-end" : "justify-start")}
+                  className={cn("flex w-full flex-col", mine ? "items-end" : "items-start")}
                 >
+                  {isGroup && !mine && senderName && (
+                    <p className="mb-1 px-1 text-[10px] font-semibold text-slate-400">
+                      {senderName}
+                    </p>
+                  )}
                   <div
                     className={cn(
                       "max-w-[78%] rounded-2xl px-3.5 py-2 shadow-sm sm:max-w-[65%]",
@@ -224,9 +307,69 @@ export function ChatWindow({
                         : "glass-soft rounded-bl-md text-slate-700",
                     )}
                   >
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                      {message.body}
-                    </p>
+                    {attachment ? (
+                      isImageType(attachment.type) ? (
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block overflow-hidden rounded-xl"
+                        >
+                          <img
+                            src={attachment.url}
+                            alt={attachment.name}
+                            loading="lazy"
+                            className="max-h-72 w-full object-cover"
+                          />
+                        </a>
+                      ) : isVideoType(attachment.type) ? (
+                        <video
+                          src={attachment.url}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="max-h-72 w-full rounded-xl"
+                        />
+                      ) : (
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            "flex items-center gap-3 rounded-xl px-1 py-0.5",
+                            mine
+                              ? "text-white"
+                              : "text-slate-700",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                              mine ? "bg-white/20" : "bg-sky-500/10 text-sky-600",
+                            )}
+                          >
+                            <FileText className="size-5" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block max-w-[180px] truncate text-sm font-semibold">
+                              {attachment.name}
+                            </span>
+                            <span
+                              className={cn(
+                                "block text-[11px]",
+                                mine ? "text-white/70" : "text-slate-400",
+                              )}
+                            >
+                              {formatBytes(attachment.size)} · Tap to open
+                            </span>
+                          </span>
+                        </a>
+                      )
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                        {message.body}
+                      </p>
+                    )}
                     <p
                       className={cn(
                         "mt-1 text-right text-[10px]",
@@ -253,6 +396,29 @@ export function ChatWindow({
             void submit();
           }}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+            className="hidden"
+            onChange={(e) => void handleFiles(e.target.files)}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 rounded-full text-slate-500 hover:bg-white/70 hover:text-sky-700"
+            title="Share a photo, video or file"
+            aria-label="Share a photo, video or file"
+          >
+            {uploading ? (
+              <Loader2 className="size-5 animate-spin text-sky-600" />
+            ) : (
+              <Paperclip className="size-5" />
+            )}
+          </Button>
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -262,18 +428,23 @@ export function ChatWindow({
                 void submit();
               }
             }}
-            placeholder="Type a message…"
+            placeholder={uploading ? "Uploading…" : placeholder}
+            disabled={uploading}
             className="glass-soft min-h-10 max-h-36 flex-1 resize-none rounded-2xl border-white/70 text-sm"
             rows={1}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={!draft.trim() || sending}
+            disabled={!draft.trim() || sending || uploading}
             className="btn-gradient size-10 shrink-0 rounded-full"
             aria-label="Send message"
           >
-            <Send className="size-4" />
+            {sending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
           </Button>
         </form>
       </div>

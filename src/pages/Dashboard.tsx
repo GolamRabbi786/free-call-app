@@ -7,15 +7,16 @@ import { CallOverlay } from "@/components/call/CallOverlay";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { Sidebar, type SidebarTab } from "@/components/chat/Sidebar";
 import { useCall } from "@/hooks/use-call";
+import { useGroupCall } from "@/hooks/use-group-call";
 import { usePresence } from "@/hooks/use-presence";
 
 export default function Dashboard() {
   // Keep this user's presence heartbeat alive so others see them online.
   usePresence();
 
-  // Single call instance — owns the WebRTC peer connection + signaling. It is
-  // passed to CallOverlay (which renders it) and used here to start calls.
+  // Single call instances — own the WebRTC peer connections + signaling.
   const call = useCall();
+  const groupCall = useGroupCall();
 
   const getOrCreate = useMutation(api.conversations.getOrCreate);
   const onlineUsers = useQuery(api.presence.onlineUsers);
@@ -27,12 +28,20 @@ export default function Dashboard() {
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(
     null,
   );
+  const [selectedGroupId, setSelectedGroupId] = useState<Id<"groups"> | null>(
+    null,
+  );
 
   const convo = useQuery(
     api.conversations.get,
     conversationId ? { conversationId } : "skip",
   );
+  const groupView = useQuery(
+    api.groups.get,
+    selectedGroupId ? { groupId: selectedGroupId } : "skip",
+  );
   const otherUser = convo?.otherUser ?? null;
+  const group = groupView ? { ...groupView.group, members: groupView.members } : null;
 
   const onlineMap = useMemo(() => {
     const map = new Map<string, { online: boolean; inCall: boolean }>();
@@ -48,12 +57,20 @@ export default function Dashboard() {
 
   const handleSelectUser = async (userId: Id<"users">) => {
     setSelectedUserId(userId);
+    setSelectedGroupId(null);
     try {
       const id = await getOrCreate({ otherUserId: userId });
       setConversationId(id);
     } catch {
       /* e.g. briefly unauthenticated — conversation will be created on retry */
     }
+  };
+
+  const handleSelectGroup = (groupId: Id<"groups">) => {
+    setSelectedGroupId(groupId);
+    setSelectedUserId(null);
+    setConversationId(null);
+    setTab("groups");
   };
 
   const handleStartCall = async (
@@ -70,10 +87,11 @@ export default function Dashboard() {
   const closeChat = () => {
     setConversationId(null);
     setSelectedUserId(null);
+    setSelectedGroupId(null);
   };
 
   // On small screens show either the sidebar or the open chat, never both.
-  const showChat = conversationId !== null;
+  const showChat = conversationId !== null || selectedGroupId !== null;
 
   return (
     <div className="app-bg min-h-screen text-foreground">
@@ -89,7 +107,9 @@ export default function Dashboard() {
             <Sidebar
               activeConversationId={conversationId}
               activeOtherUserId={selectedUserId}
+              activeGroupId={selectedGroupId}
               onSelectUser={(userId) => void handleSelectUser(userId)}
+              onSelectGroup={handleSelectGroup}
               onStartCall={(userId, kind) => void handleStartCall(userId, kind)}
               tab={tab}
               onTabChange={setTab}
@@ -104,12 +124,19 @@ export default function Dashboard() {
             <div className="glass flex h-full w-full min-h-0 flex-col overflow-hidden rounded-3xl">
               <ChatWindow
                 otherUser={otherUser}
+                group={group}
                 conversationId={conversationId}
+                groupId={selectedGroupId}
                 isOnline={selectedStatus.online}
                 inCall={selectedStatus.inCall}
                 onCall={(kind) => {
                   if (otherUser) {
                     void call.startCall(otherUser._id as Id<"users">, kind);
+                  }
+                }}
+                onGroupCall={(kind) => {
+                  if (selectedGroupId) {
+                    void groupCall.startGroupCall(selectedGroupId, kind);
                   }
                 }}
                 onBack={closeChat}
@@ -119,7 +146,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <CallOverlay call={call} />
+      <CallOverlay call={call} groupCall={groupCall} />
     </div>
   );
 }
