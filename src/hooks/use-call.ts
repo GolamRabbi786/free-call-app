@@ -1,6 +1,6 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useMutation, useQuery, skipToken } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -47,7 +47,7 @@ export function useCall() {
   const session = useQuery(api.calls.activeCallFor);
   const signals = useQuery(
     api.calls.listSignals,
-    session ? { sessionId: session._id } : skipToken,
+    session ? { sessionId: session._id } : "skip",
   );
 
   const startCallMutation = useMutation(api.calls.startCall);

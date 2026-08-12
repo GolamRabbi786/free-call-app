@@ -1,6 +1,6 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { skipToken, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import { MessageSquarePlus, Phone, Send, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -33,7 +33,7 @@ export function ChatWindow({
   const myId = user?._id;
   const messages = useQuery(
     api.messages.list,
-    conversationId ? { conversationId } : skipToken,
+    conversationId ? { conversationId } : "skip",
   );
   const sendMessage = useMutation(api.messages.send);
 
