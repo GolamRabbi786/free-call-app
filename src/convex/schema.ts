@@ -140,6 +140,18 @@ const schema = defineSchema(
       payload: v.any(),
     }).index("by_session", ["sessionId"]),
 
+    // Web Push subscriptions (one per browser/device per user) so alerts still
+    // arrive as system notifications when the app is closed or backgrounded.
+    webPushSubscriptions: defineTable({
+      userId: v.id("users"),
+      endpoint: v.string(),
+      keys: v.object({
+        p256dh: v.string(),
+        auth: v.string(),
+      }),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
+
     // One presence document per user while they are online (heartbeat kept fresh).
     presence: defineTable({
       userId: v.id("users"),

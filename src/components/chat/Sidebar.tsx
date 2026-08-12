@@ -38,6 +38,7 @@ import {
   notificationPermission,
   requestNotificationPermission,
 } from "@/lib/notify";
+import { pushSupported, subscribeToPush } from "@/lib/push";
 import { compressImage, uploadToConvex } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -80,6 +81,8 @@ export function Sidebar({
   const updateProfileImage = useMutation(api.users.updateProfileImage);
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const createGroup = useMutation(api.groups.create);
+  const vapidPublicKey = useQuery(api.webPush.vapidPublicKey);
+  const savePushSubscription = useMutation(api.webPush.saveSubscription);
 
   const [query, setQuery] = useState("");
   const [editOpen, setEditOpen] = useState(false);
@@ -93,7 +96,16 @@ export function Sidebar({
     const result = await requestNotificationPermission();
     setNotifPerm(result);
     if (result === "granted") {
-      toast.success("Notifications on — you'll hear about calls & messages");
+      let pushText = "";
+      // Also subscribe to Web Push so alerts arrive even when the app is
+      // closed (needs VAPID keys set in the Keys tab + installed PWA).
+      if (vapidPublicKey && pushSupported()) {
+        const ok = await subscribeToPush(vapidPublicKey, (args) =>
+          savePushSubscription(args),
+        );
+        if (ok) pushText = " Alerts will also arrive when the app is closed.";
+      }
+      toast.success(`Notifications on — you'll hear about calls & messages.${pushText}`);
     } else if (result === "denied") {
       toast.error(
         "Notifications are blocked in your browser — allow them in site settings",

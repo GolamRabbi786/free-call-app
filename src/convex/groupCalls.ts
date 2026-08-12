@@ -1,4 +1,5 @@
 import { mutation, query, type MutationCtx } from "./_generated/server";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
@@ -56,6 +57,15 @@ export const startGroupCall = mutation({
       status: "active",
       participantIds,
       startedAt: Date.now(),
+    }).then(async (sessionId) => {
+      // Web Push to members who aren't in the app so they can join the call.
+      await ctx.scheduler.runAfter(0, api.webPushSender.notifyGroupCall, {
+        groupId,
+        initiatorId: me._id,
+        kind,
+        memberIds: participantIds,
+      });
+      return sessionId;
     });
   },
 });

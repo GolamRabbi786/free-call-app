@@ -62,3 +62,58 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+/* ---- Web Push (alerts even when the app is closed) ---- */
+
+self.addEventListener("push", (event) => {
+  let data = {
+    title: "Free Call",
+    body: "You have a new update",
+    url: "/dashboard",
+  };
+  try {
+    if (event.data) data = Object.assign(data, event.data.json());
+  } catch (err) {
+    /* non-JSON payloads are ignored */
+  }
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        // If the app is open and focused, the in-app NotificationWatcher
+        // already alerts — never double-notify.
+        const focused = clients.some(
+          (client) =>
+            client.focused &&
+            new URL(client.url).origin === self.location.origin,
+        );
+        if (focused) return;
+        return self.registration.showNotification(data.title, {
+          body: data.body,
+          icon: "/logo.svg",
+          badge: "/logo.svg",
+          tag: `freecall-${Date.now()}`,
+          data: { url: data.url },
+        });
+      }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (new URL(client.url).origin === self.location.origin) {
+            client.navigate(url);
+            return client.focus();
+          }
+        }
+        return self.clients.openWindow(url);
+      }),
+  );
+});

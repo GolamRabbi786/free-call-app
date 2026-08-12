@@ -1,4 +1,5 @@
 import { mutation, query, type MutationCtx } from "./_generated/server";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
@@ -71,6 +72,16 @@ export const send = mutation({
       conversationId,
       senderId: me._id,
       body: trimmed,
+    }).then(async (messageId) => {
+      // Web Push to the other participant when they're not in the app.
+      const recipientId = convo.userA === me._id ? convo.userB : convo.userA;
+      await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+        toUserId: recipientId,
+        senderId: me._id,
+        body: trimmed,
+        conversationId,
+      });
+      return messageId;
     });
   },
 });
@@ -99,6 +110,16 @@ export const sendAttachment = mutation({
       senderId: me._id,
       body: "",
       attachment,
+    }).then(async (messageId) => {
+      const recipientId =
+        convo.userA === me._id ? convo.userB : convo.userA;
+      await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+        toUserId: recipientId,
+        senderId: me._id,
+        body: args.name,
+        conversationId: args.conversationId,
+      });
+      return messageId;
     });
   },
 });
@@ -147,6 +168,25 @@ export const sendGroup = mutation({
       groupId,
       senderId: me._id,
       body: trimmed,
+    }).then(async (messageId) => {
+      // Web Push to every other member who isn't in the app right now.
+      const members = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group", (q) => q.eq("groupId", groupId))
+        .collect();
+      await Promise.all(
+        members
+          .filter((m) => m.userId !== me._id)
+          .map((m) =>
+            ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+              toUserId: m.userId,
+              senderId: me._id,
+              body: trimmed,
+              groupId,
+            }),
+          ),
+      );
+      return messageId;
     });
   },
 });
@@ -177,6 +217,24 @@ export const sendGroupAttachment = mutation({
       senderId: me._id,
       body: "",
       attachment,
+    }).then(async (messageId) => {
+      const members = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group", (q) => q.eq("groupId", args.groupId))
+        .collect();
+      await Promise.all(
+        members
+          .filter((m) => m.userId !== me._id)
+          .map((m) =>
+            ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+              toUserId: m.userId,
+              senderId: me._id,
+              body: args.name,
+              groupId: args.groupId,
+            }),
+          ),
+      );
+      return messageId;
     });
   },
 });

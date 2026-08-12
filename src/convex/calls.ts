@@ -1,4 +1,5 @@
 import { mutation, query, type MutationCtx } from "./_generated/server";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
@@ -136,6 +137,15 @@ export const startCall = mutation({
       calleeId,
       kind,
       status: "ringing",
+    }).then(async (sessionId) => {
+      // Web Push so the callee still sees the incoming call if the app is
+      // closed or backgrounded (skipped automatically when they're online).
+      await ctx.scheduler.runAfter(0, api.webPushSender.notifyIncomingCall, {
+        calleeId,
+        callerId: me._id,
+        kind,
+      });
+      return sessionId;
     });
   },
 });
