@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
@@ -11,6 +11,67 @@ const STALE_SESSION_MS = 5 * 60_000;
 
 function toPublicUser(user: { _id: string; name?: string; image?: string }) {
   return { _id: user._id, name: user.name, image: user.image };
+}
+
+/** Find the 1:1 conversation between two users, creating it if needed. */
+async function findOrCreateConversation(
+  ctx: MutationCtx,
+  a: Id<"users">,
+  b: Id<"users">,
+) {
+  const [userA, userB] = a < b ? [a, b] : [b, a];
+  const existing = await ctx.db
+    .query("conversations")
+    .withIndex("by_userA", (q) => q.eq("userA", userA))
+    .filter((q) => q.eq(q.field("userB"), userB))
+    .first();
+  if (existing) return existing._id;
+  return await ctx.db.insert("conversations", { userA, userB });
+}
+
+/**
+ * Write a call-history entry into the conversation between caller and callee
+ * once a session reaches a terminal state. Idempotent per session so both
+ * participants ending the call never produces a duplicate entry.
+ */
+async function recordCallMessage(
+  ctx: MutationCtx,
+  session: {
+    _id: Id<"callSessions">;
+    callerId: Id<"users">;
+    calleeId: Id<"users">;
+    kind: "video" | "audio";
+    startedAt?: number;
+  },
+  finalStatus: "ended" | "declined" | "missed",
+  now: number,
+) {
+  const existing = await ctx.db
+    .query("messages")
+    .withIndex("by_callSession", (q) => q.eq("callSessionId", session._id))
+    .first();
+  if (existing) return;
+
+  const conversationId = await findOrCreateConversation(
+    ctx,
+    session.callerId,
+    session.calleeId,
+  );
+  const callDurationMs =
+    finalStatus === "ended" && session.startedAt
+      ? now - session.startedAt
+      : undefined;
+
+  await ctx.db.insert("messages", {
+    conversationId,
+    senderId: session.callerId,
+    body: "",
+    kind: "call",
+    callKind: session.kind,
+    callStatus: finalStatus,
+    callDurationMs,
+    callSessionId: session._id,
+  });
 }
 
 /** Start a new call: ends any stale ringing sessions, then inserts a ringing session. */
@@ -108,7 +169,9 @@ export const declineCall = mutation({
     if (session.calleeId !== me._id) throw new Error("Not the callee of this call");
     if (session.status !== "ringing") throw new Error("Call is no longer ringing");
 
-    await ctx.db.patch(sessionId, { status: "declined", endedAt: Date.now() });
+    const now = Date.now();
+    await ctx.db.patch(sessionId, { status: "declined", endedAt: now });
+    await recordCallMessage(ctx, session, "declined", now);
   },
 });
 
@@ -131,10 +194,13 @@ export const endCall = mutation({
       return;
     }
 
+    const now = Date.now();
+    const finalStatus = outcome ?? "ended";
     await ctx.db.patch(sessionId, {
-      status: outcome ?? "ended",
-      endedAt: Date.now(),
+      status: finalStatus,
+      endedAt: now,
     });
+    await recordCallMessage(ctx, session, finalStatus, now);
   },
 });
 

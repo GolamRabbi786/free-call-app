@@ -58,7 +58,15 @@ const schema = defineSchema(
       conversationId: v.id("conversations"),
       senderId: v.id("users"),
       body: v.string(),
-    }).index("by_conversation", ["conversationId"]),
+      // "text" (default) or "call" — a call-history entry rendered in the chat.
+      kind: v.optional(v.union(v.literal("text"), v.literal("call"))),
+      callKind: v.optional(callKindValidator),
+      callStatus: v.optional(callStatusValidator),
+      callDurationMs: v.optional(v.number()),
+      callSessionId: v.optional(v.id("callSessions")),
+    })
+      .index("by_conversation", ["conversationId"])
+      .index("by_callSession", ["callSessionId"]),
 
     // A single call between two users, with a lifecycle:
     // ringing -> active -> ended | declined | missed

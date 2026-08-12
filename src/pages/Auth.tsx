@@ -132,7 +132,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   </button>
                 </div>
                 <CardTitle className="mt-4 text-2xl font-bold text-slate-900">
-                  Welcome to Milon
+                  Welcome to Free Call
                 </CardTitle>
                 <CardDescription className="text-slate-500">
                   Enter your email to log in or sign up — free calls &amp; chat

@@ -2,11 +2,19 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
-import { ArrowLeft, MessageSquarePlus, Phone, Send, Video } from "lucide-react";
+import {
+  ArrowLeft,
+  MessageSquarePlus,
+  Phone,
+  PhoneMissed,
+  Send,
+  Video,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { describeCallMessage } from "@/lib/call-history";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -164,6 +172,44 @@ export function ChatWindow({
         ) : (
           <div className="flex flex-col gap-2.5">
             {messages.map((message) => {
+              // Call-history entries render as a centered chip.
+              if (message.kind === "call") {
+                const missed =
+                  message.callStatus === "missed" ||
+                  message.callStatus === "declined";
+                const cancelled =
+                  message.callStatus === "ended" && !message.callDurationMs;
+                return (
+                  <div
+                    key={message._id}
+                    className="flex w-full justify-center"
+                  >
+                    <div
+                      className={cn(
+                        "glass-soft flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium shadow-sm",
+                        missed
+                          ? "text-rose-600"
+                          : cancelled
+                            ? "text-slate-500"
+                            : "text-emerald-700",
+                      )}
+                    >
+                      {missed ? (
+                        <PhoneMissed className="size-3.5" />
+                      ) : message.callKind === "video" ? (
+                        <Video className="size-3.5" />
+                      ) : (
+                        <Phone className="size-3.5" />
+                      )}
+                      <span>{describeCallMessage(message)}</span>
+                      <span className="text-slate-400">
+                        {format(message._creationTime, "h:mm a")}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
               const mine = message.senderId === myId;
               return (
                 <div

@@ -72,10 +72,10 @@ function Navbar() {
           <BrandMark />
           <div className="leading-tight">
             <p className="text-base font-bold tracking-tight text-slate-800">
-              Milon
+              Free Call
             </p>
             <p className="text-[10px] font-medium tracking-wide text-slate-500">
-              Free calls &amp; chat
+              Voice, video &amp; chat
             </p>
           </div>
         </div>
@@ -246,7 +246,7 @@ function Hero() {
           ফ্রি ভয়েস কল, ভিডিও কল আর চ্যাট — কোনো জ্যামলা ছাড়াই।
         </p>
         <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
-          Milon gives you unlimited voice calls, HD video calls and instant
+          Free Call gives you unlimited voice calls, HD video calls and instant
           chat — right in your browser. No app installs, no minutes, no fees.
           Just pick a person and start talking.
         </p>
@@ -505,7 +505,7 @@ const FAQS = [
   },
   {
     q: "Do I need to install anything?",
-    a: "No. Milon runs entirely in your browser. No app stores, no downloads, no updates.",
+    a: "No. Free Call runs entirely in your browser. No app stores, no downloads, no updates.",
   },
   {
     q: "How do video calls connect?",
@@ -513,7 +513,7 @@ const FAQS = [
   },
   {
     q: "Who can I call?",
-    a: "Anyone with a Milon account. Sign in on a second browser or device, and you'll see each other in the People tab.",
+    a: "Anyone with a Free Call account. Sign in on a second browser or device, and you'll see each other in the People tab.",
   },
 ];
 
@@ -565,7 +565,7 @@ function FinalCta() {
               <span className="text-gradient-cool">one click away</span>
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
-              Join Milon today and start making free calls, video calls and
+              Join Free Call today and start making free calls, video calls and
               chats — জ্যামলা ছাড়াই।
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -603,7 +603,7 @@ function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row">
         <div className="flex items-center gap-2.5">
           <BrandMark className="size-8 rounded-lg" />
-          <p className="text-sm font-bold text-slate-800">Milon</p>
+          <p className="text-sm font-bold text-slate-800">Free Call</p>
           <p className="text-xs text-slate-500">
             Free voice calls, video calls &amp; chat.
           </p>

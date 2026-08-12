@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
+import { describeCallMessage } from "@/lib/call-history";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -114,9 +115,9 @@ export function Sidebar({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-lg font-bold leading-tight tracking-tight text-slate-800">
-            Milon
+            Free Call
           </p>
-          <p className="text-[11px] text-slate-500">Free calls &amp; chat</p>
+          <p className="text-[11px] text-slate-500">Voice, video &amp; chat</p>
         </div>
         <Button
           type="button"
@@ -254,9 +255,11 @@ export function Sidebar({
                       </div>
                       <p className="truncate text-xs text-slate-500">
                         {lastMessage
-                          ? lastMessage.senderId === user?._id
-                            ? `You: ${lastMessage.body}`
-                            : lastMessage.body
+                          ? lastMessage.kind === "call"
+                            ? `${lastMessage.senderId === user?._id ? "You: " : ""}${describeCallMessage(lastMessage)}`
+                            : lastMessage.senderId === user?._id
+                              ? `You: ${lastMessage.body}`
+                              : lastMessage.body
                           : "Say hello 👋"}
                       </p>
                     </div>
