@@ -21,6 +21,7 @@ import {
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Link } from "react-router";
+import logo from "@/assets/logo.svg";
 import { AppBackground } from "@/components/AppBackground";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
@@ -60,11 +61,16 @@ function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "btn-gradient flex size-9 items-center justify-center rounded-xl text-white shadow-lg",
+        "block size-9 shrink-0 overflow-hidden rounded-xl shadow-lg",
         className,
       )}
     >
-      <Video className="size-5" />
+      <img
+        src={logo}
+        alt="Free Call"
+        className="size-full object-cover"
+        draggable={false}
+      />
     </span>
   );
 }

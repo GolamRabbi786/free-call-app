@@ -17,7 +17,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import logo from "@/assets/logo.svg";
 import { AppBackground } from "@/components/AppBackground";
-import { ArrowRight, Loader2, Mail, UserX, Video } from "lucide-react";
+import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -126,9 +126,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     type="button"
                     onClick={() => navigate("/")}
                     aria-label="Back to home"
-                    className="btn-gradient flex size-14 items-center justify-center rounded-2xl shadow-lg transition-transform hover:scale-105"
+                    className="size-14 overflow-hidden rounded-2xl shadow-lg transition-transform hover:scale-105"
                   >
-                    <Video className="size-7 text-white" />
+                    <img
+                      src={logo}
+                      alt="Free Call"
+                      className="size-full object-cover"
+                      draggable={false}
+                    />
                   </button>
                 </div>
                 <CardTitle className="mt-4 text-2xl font-bold text-slate-900">

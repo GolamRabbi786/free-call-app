@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
+import logo from "@/assets/logo.svg";
 import { describeCallMessage } from "@/lib/call-history";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -110,8 +111,13 @@ export function Sidebar({
     <div className="glass flex h-full min-h-0 flex-col rounded-3xl">
       {/* app header */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-2">
-        <div className="btn-gradient flex size-10 items-center justify-center rounded-xl text-white shadow-lg">
-          <Video className="size-5" />
+        <div className="size-10 shrink-0 overflow-hidden rounded-xl shadow-lg">
+          <img
+            src={logo}
+            alt="Free Call"
+            className="size-full object-cover"
+            draggable={false}
+          />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-lg font-bold leading-tight tracking-tight text-slate-800">
