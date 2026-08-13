@@ -53,8 +53,16 @@ export const phonePassword = ConvexCredentials({
     let phone: string | undefined;
     if (identifier.includes("@")) {
       email = identifier.toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error("Enter a valid email address.");
+      }
     } else {
       phone = normalizePhone(identifier);
+      // Reject anything that doesn't normalize to a real-looking E.164 number
+      // (at least 7 digits) so garbage input can't create accounts.
+      if (!phone.startsWith("+") || phone.replace(/\D/g, "").length < 7) {
+        throw new Error("Enter a valid phone number (e.g. +8801XXXXXXXXX).");
+      }
     }
     const accountId = email ?? phone!;
 
