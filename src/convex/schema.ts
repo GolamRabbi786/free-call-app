@@ -196,15 +196,6 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_token", ["token"]),
 
-    // Dev-mode phone OTPs. When SMS (Twilio) isn't configured yet, the code is
-    // stored here so the sign-up flow still completes end-to-end and the UI
-    // can show the code instead of failing with a masked error.
-    devOtps: defineTable({
-      phone: v.string(),
-      code: v.string(),
-      expiresAt: v.number(),
-    }).index("by_phone", ["phone"]),
-
     // The project source ZIP lives in the database as base64 chunks so only
     // the admin panel (token-gated) can read it — no public link anywhere.
     projectZipMeta: defineTable({

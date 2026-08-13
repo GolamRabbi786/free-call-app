@@ -7,23 +7,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
 
 import { useAuth } from "@/hooks/use-auth";
-import { useConvex } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import logo from "@/assets/logo.svg";
 import { Link } from "react-router";
 import { AppBackground } from "@/components/AppBackground";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
   ArrowRight,
+  Eye,
+  EyeOff,
   Loader2,
+  LogIn,
   Mail,
   MessageSquareText,
   Moon,
@@ -31,6 +26,8 @@ import {
   ShieldCheck,
   Smartphone,
   Sun,
+  User,
+  UserPlus,
   Video,
 } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
@@ -53,20 +50,26 @@ function resolveRedirectAfterAuth(
 }
 
 type Method = "phone" | "email";
-type Step = "input" | { method: Method; identifier: string };
+type Mode = "login" | "signup";
 
-// The auth library wraps server errors in a noisy envelope like
-// "[CONVEX A(auth:signIn)] [Request ID: ...] Server Error Called by client".
-// Pull out just the real message so the UI shows something readable.
+/**
+ * The auth library wraps server errors in a noisy envelope like
+ * "[CONVEX A(auth:signIn)] [Request ID: ...] Server Error
+ *  Uncaught Error: InvalidSecret\n    at ...". Pull out just the real message
+ * so the UI shows something readable.
+ */
 function friendlyAuthError(error: unknown): string {
   const raw =
     error instanceof Error ? error.message : "Something went wrong. Please try again.";
-  const match = raw.match(/\] (.*?) Called by client/);
-  const inner = match?.[1] ?? raw;
-  if (inner === "Server Error") {
-    return "Something went wrong on the server. Please try again.";
-  }
-  return inner || "Something went wrong. Please try again.";
+  // Envelope with "Called by client" (client-side validation errors).
+  const calledByClient = raw.match(/\](.*?)Called by client/);
+  if (calledByClient?.[1]) return calledByClient[1].trim();
+  // Envelope with "Uncaught Error: ..." (server-side thrown errors).
+  const uncaught = raw.match(/(?:Uncaught Error:\s*)+([^\n]+)/);
+  if (uncaught?.[1]) return uncaught[1].trim();
+  const stripped = raw.split("\n")[0].trim();
+  if (stripped && stripped !== "Server Error") return stripped;
+  return "Something went wrong. Please try again.";
 }
 
 function BrandPanel() {
@@ -131,8 +134,8 @@ function BrandPanel() {
       </div>
 
       <p className="relative mt-10 text-[11px] text-slate-400 dark:text-slate-500">
-        Sign in with your phone number — a 6-digit code is sent by SMS. No
-        password to remember, ever.
+        Sign in with your phone number or email and a password — no
+        verification codes, no waiting.
       </p>
     </div>
   );
@@ -148,15 +151,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   );
 
   const [method, setMethod] = useState<Method>("phone");
-  const [step, setStep] = useState<Step>("input");
+  const [mode, setMode] = useState<Mode>("login");
+  const [name, setName] = useState("");
   const [countryCode, setCountryCode] = useState("+880");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
-  const convex = useConvex();
   const [theme, setTheme] = useState<"light" | "dark">(() => getTheme());
 
   useEffect(() => {
@@ -180,72 +183,53 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     return `+${code}${digits}`;
   };
 
-  const handleSendCode = async (event: React.FormEvent<HTMLFormElement>) => {
+  const switchToLogin = (message: string) => {
+    setMode("login");
+    setError(message);
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
     try {
+      const params: Record<string, string> = {
+        flow: mode,
+        password,
+      };
       if (method === "phone") {
-        const normalized = fullPhone();
-        await signIn("phone-otp", { phone: normalized });
-        setStep({ method: "phone", identifier: normalized });
-        setDevCode(null);
-        // Dev fallback: when SMS isn't configured yet the code is stored in
-        // devOtps — fetch it so the user can still sign in.
-        try {
-          const dev = await convex.query(api.auth.devOtp.get, {
-            phone: normalized,
-          });
-          if (dev) setDevCode(dev.code);
-        } catch {
-          // Not dev mode (or query failed) — ignore, real SMS was sent.
-        }
+        params.phone = fullPhone();
       } else {
-        const formData = new FormData(event.currentTarget);
-        await signIn("email-otp", formData);
-        setStep({ method: "email", identifier: formData.get("email") as string });
+        params.email = email.trim().toLowerCase();
       }
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Sign-in error:", error);
-      setError(friendlyAuthError(error));
+      if (mode === "signup" && name.trim()) {
+        params.name = name.trim();
+      }
+      await signIn("phone-password", params);
+      // Signed in — the useEffect above navigates to `redirect`.
+    } catch (rawError) {
+      console.error("Sign-in error:", rawError);
+      const message = friendlyAuthError(rawError);
+      if (message.includes("already exists")) {
+        switchToLogin(
+          "This number is already registered — sign in below with your password.",
+        );
+      } else if (
+        message.includes("InvalidSecret") ||
+        message.includes("InvalidAccountId") ||
+        message.toLowerCase().includes("invalid credentials")
+      ) {
+        setError("Wrong number or password. Check and try again.");
+      } else if (message.includes("TooManyFailedAttempts")) {
+        setError("Too many failed attempts. Try again in a few minutes.");
+      } else {
+        setError(message);
+      }
       setIsLoading(false);
     }
   };
 
-  const handleVerify = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    try {
-      if (step !== "input" && step.method === "phone") {
-        await signIn("phone-otp", { phone: step.identifier, code: otp });
-        // Signed in — clean up the dev-mode code if one was shown.
-        void convex
-          .mutation(api.auth.devOtp.clear, { phone: step.identifier })
-          .catch(() => {});
-      } else {
-        const formData = new FormData(event.currentTarget);
-        await signIn("email-otp", formData);
-      }
-    } catch (error) {
-      console.error("OTP verification error:", error);
-      setError("The code you entered is incorrect or expired.");
-      setIsLoading(false);
-      setOtp("");
-      return;
-    }
-    // Signed in — the useEffect above navigates to `redirect`.
-  };
-
-  const backToInput = () => {
-    setStep("input");
-    setOtp("");
-    setError(null);
-    setDevCode(null);
-  };
-
-  const isPhoneStep = step !== "input" && step.method === "phone";
+  const isSignup = mode === "signup";
 
   return (
     <div className="app-bg min-h-screen flex flex-col">
@@ -291,229 +275,195 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               transition={{ duration: 0.35, ease: "easeOut" }}
             >
               <Card className="glass-strong w-full overflow-hidden rounded-[2rem] border-white/70 pb-0 shadow-none">
-                {step === "input" ? (
-                  <>
-                    <CardHeader className="text-center">
-                      <div className="mx-auto flex size-16 items-center justify-center rounded-3xl bg-gradient-to-br from-sky-400 to-indigo-500 text-white shadow-lg shadow-indigo-500/30">
-                        {method === "phone" ? (
-                          <Smartphone className="size-7" />
-                        ) : (
-                          <Mail className="size-7" />
-                        )}
-                      </div>
-                      <CardTitle className="mt-4 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                        {method === "phone"
-                          ? "Sign in with your phone"
-                          : "Sign in with email"}
-                      </CardTitle>
-                      <CardDescription className="text-slate-500 dark:text-slate-400">
-                        We'll text you a code — no password needed
-                      </CardDescription>
-                    </CardHeader>
+                <CardHeader className="text-center">
+                  <div className="mx-auto flex size-16 items-center justify-center rounded-3xl bg-gradient-to-br from-sky-400 to-indigo-500 text-white shadow-lg shadow-indigo-500/30">
+                    {isSignup ? <UserPlus className="size-7" /> : <LogIn className="size-7" />}
+                  </div>
+                  <CardTitle className="mt-4 text-2xl font-bold text-slate-900 dark:text-slate-50">
+                    {isSignup ? "Create your account" : "Welcome back"}
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">
+                    {isSignup
+                      ? "Your number or email + a password — no OTP needed"
+                      : "Sign in with your number or email + password"}
+                  </CardDescription>
+                </CardHeader>
 
-                    <CardContent className="px-6 pb-6 sm:px-8">
-                      {/* method switcher */}
-                      <div className="glass-soft mb-5 grid grid-cols-2 gap-1 rounded-2xl p-1">
-                        {(
-                          [
-                            { id: "phone", label: "Phone", icon: Smartphone },
-                            { id: "email", label: "Email", icon: Mail },
-                          ] as const
-                        ).map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              setMethod(m.id);
-                              setError(null);
-                            }}
-                            className={cn(
-                              "flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all",
-                              method === m.id
-                                ? "bg-white/85 text-slate-900 shadow-sm dark:bg-slate-700/80 dark:text-white"
-                                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
-                            )}
-                          >
-                            <m.icon className="size-4" />
-                            {m.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <form onSubmit={handleSendCode} className="flex flex-col gap-3">
-                        {method === "phone" ? (
-                          <div className="flex items-center gap-2">
-                            <div className="glass-soft flex items-center gap-1 rounded-xl border border-white/70 px-3 py-2.5">
-                              <span className="text-sm">🇧🇩</span>
-                              <Input
-                                value={countryCode}
-                                onChange={(e) =>
-                                  setCountryCode(
-                                    "+" + e.target.value.replace(/[^\d]/g, ""),
-                                  )
-                                }
-                                className="h-auto w-14 border-0 bg-transparent p-0 text-sm font-semibold shadow-none focus-visible:ring-0 dark:text-slate-100"
-                                aria-label="Country code"
-                              />
-                            </div>
-                            <Input
-                              value={phone}
-                              onChange={(e) =>
-                                setPhone(e.target.value.replace(/[^\d]/g, ""))
-                              }
-                              placeholder="1XXXXXXXXX"
-                              inputMode="tel"
-                              className="glass-soft h-12 flex-1 rounded-xl border-white/70 pl-4 text-base tracking-wide"
-                              disabled={isLoading}
-                              required
-                              maxLength={15}
-                            />
-                          </div>
-                        ) : (
-                          <Input
-                            name="email"
-                            placeholder="name@example.com"
-                            type="email"
-                            className="glass-soft h-12 rounded-xl border-white/70 pl-4"
-                            disabled={isLoading}
-                            required
-                          />
-                        )}
-
-                        {error && (
-                          <p className="text-sm text-rose-500 dark:text-rose-400">
-                            {error}
-                          </p>
-                        )}
-
-                        <Button
-                          type="submit"
-                          className="btn-gradient h-12 w-full rounded-full text-white shadow-md"
-                          disabled={isLoading}
-                        >
-                          {isLoading ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <ArrowRight className="size-4" />
-                          )}
-                          {isLoading
-                            ? "Sending code…"
-                            : method === "phone"
-                              ? "Send code"
-                              : "Send code"}
-                        </Button>
-                      </form>
-
-                      <p className="mt-4 text-center text-[11px] leading-5 text-slate-400 dark:text-slate-500">
-                        By continuing you agree to our terms. Standard SMS
-                        rates may apply for the verification text.
-                      </p>
-                    </CardContent>
-                  </>
-                ) : (
-                  <>
-                    <CardHeader className="text-center">
-                      <Button
+                <CardContent className="px-6 pb-6 sm:px-8">
+                  {/* method switcher */}
+                  <div className="glass-soft mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1">
+                    {(
+                      [
+                        { id: "phone", label: "Phone", icon: Smartphone },
+                        { id: "email", label: "Email", icon: Mail },
+                      ] as const
+                    ).map((m) => (
+                      <button
+                        key={m.id}
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-3 left-3 rounded-full text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-                        onClick={backToInput}
-                        title="Go back"
-                        aria-label="Go back"
+                        onClick={() => {
+                          setMethod(m.id);
+                          setError(null);
+                        }}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all",
+                          method === m.id
+                            ? "bg-white/85 text-slate-900 shadow-sm dark:bg-slate-700/80 dark:text-white"
+                            : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+                        )}
                       >
-                        <ArrowLeft className="size-4" />
-                      </Button>
-                      <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                        <ShieldCheck className="size-6" />
-                      </div>
-                      <CardTitle className="mt-3 text-xl font-bold text-slate-900 dark:text-slate-50">
-                        Enter the code
-                      </CardTitle>
-                      <CardDescription className="text-slate-500 dark:text-slate-400">
-                        We sent a 6-digit code to{" "}
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
-                          {step.identifier}
-                        </span>
-                      </CardDescription>
-                    </CardHeader>
+                        <m.icon className="size-4" />
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
 
-                    <form onSubmit={handleVerify}>
-                      <CardContent className="px-6 pb-6 sm:px-8">
-                        <input
-                          type="hidden"
-                          name={isPhoneStep ? "phone" : "email"}
-                          value={step.identifier}
+                  {/* login / signup switcher */}
+                  <div className="glass-soft mb-5 grid grid-cols-2 gap-1 rounded-2xl p-1">
+                    {(
+                      [
+                        { id: "login", label: "Login", icon: LogIn },
+                        { id: "signup", label: "Create account", icon: UserPlus },
+                      ] as const
+                    ).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setMode(m.id);
+                          setError(null);
+                        }}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all",
+                          mode === m.id
+                            ? "bg-white/85 text-slate-900 shadow-sm dark:bg-slate-700/80 dark:text-white"
+                            : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+                        )}
+                      >
+                        <m.icon className="size-4" />
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                    {isSignup && (
+                      <div className="relative">
+                        <User className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                        <Input
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="Your name"
+                          className="glass-soft h-12 rounded-xl border-white/70 pl-10"
+                          disabled={isLoading}
+                          maxLength={40}
                         />
-                        {!isPhoneStep && <input type="hidden" name="code" value={otp} />}
+                      </div>
+                    )}
 
-                        <div className="flex justify-center">
-                          <InputOTP
-                            value={otp}
-                            onChange={setOtp}
-                            maxLength={6}
-                            disabled={isLoading}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && otp.length === 6 && !isLoading) {
-                                const form = (e.target as HTMLElement).closest("form");
-                                if (form) form.requestSubmit();
-                              }
-                            }}
-                          >
-                            <InputOTPGroup>
-                              {Array.from({ length: 6 }).map((_, index) => (
-                                <InputOTPSlot
-                                  key={index}
-                                  index={index}
-                                  className="dark:text-slate-50"
-                                />
-                              ))}
-                            </InputOTPGroup>
-                          </InputOTP>
+                    {method === "phone" ? (
+                      <div className="flex items-center gap-2">
+                        <div className="glass-soft flex items-center gap-1 rounded-xl border border-white/70 px-3 py-2.5">
+                          <span className="text-sm">🇧🇩</span>
+                          <Input
+                            value={countryCode}
+                            onChange={(e) =>
+                              setCountryCode(
+                                "+" + e.target.value.replace(/[^\d]/g, ""),
+                              )
+                            }
+                            className="h-auto w-14 border-0 bg-transparent p-0 text-sm font-semibold shadow-none focus-visible:ring-0 dark:text-slate-100"
+                            aria-label="Country code"
+                          />
                         </div>
+                        <Input
+                          value={phone}
+                          onChange={(e) =>
+                            setPhone(e.target.value.replace(/[^\d]/g, ""))
+                          }
+                          placeholder="1XXXXXXXXX"
+                          inputMode="tel"
+                          className="glass-soft h-12 flex-1 rounded-xl border-white/70 pl-4 text-base tracking-wide"
+                          disabled={isLoading}
+                          required
+                          maxLength={15}
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <Mail className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                        <Input
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="name@example.com"
+                          type="email"
+                          className="glass-soft h-12 rounded-xl border-white/70 pl-10"
+                          disabled={isLoading}
+                          required
+                        />
+                      </div>
+                    )}
 
-                        {devCode && (
-                          <div className="mt-3 rounded-xl border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-center text-xs font-semibold text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
-                            SMS not configured yet — dev code:{" "}
-                            <span className="font-mono text-base font-bold tracking-[0.3em]">
-                              {devCode}
-                            </span>
-                          </div>
+                    <div className="relative">
+                      <Phone className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                      <Input
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={isSignup ? "Create a password (6+ characters)" : "Your password"}
+                        type={showPassword ? "text" : "password"}
+                        className="glass-soft h-12 rounded-xl border-white/70 pl-10 pr-12"
+                        disabled={isLoading}
+                        required
+                        minLength={6}
+                        autoComplete={isSignup ? "new-password" : "current-password"}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((s) => !s)}
+                        className="absolute top-1/2 right-3.5 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
+                        title={showPassword ? "Hide password" : "Show password"}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
                         )}
+                      </button>
+                    </div>
 
-                        {error && (
-                          <p className="mt-3 text-center text-sm text-rose-500 dark:text-rose-400">
-                            {error}
-                          </p>
-                        )}
+                    {error && (
+                      <p className="text-sm text-rose-500 dark:text-rose-400">
+                        {error}
+                      </p>
+                    )}
 
-                        <Button
-                          type="submit"
-                          className="btn-gradient mt-5 h-12 w-full rounded-full text-white shadow-md"
-                          disabled={isLoading || otp.length !== 6}
-                        >
-                          {isLoading ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <ShieldCheck className="size-4" />
-                          )}
-                          {isLoading ? "Verifying…" : "Verify & sign in"}
-                        </Button>
+                    <Button
+                      type="submit"
+                      className="btn-gradient h-12 w-full rounded-full text-white shadow-md"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : isSignup ? (
+                        <UserPlus className="size-4" />
+                      ) : (
+                        <ArrowRight className="size-4" />
+                      )}
+                      {isLoading
+                        ? "Please wait…"
+                        : isSignup
+                          ? "Create account"
+                          : "Login"}
+                    </Button>
+                  </form>
 
-                        <div className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                          Didn't get it?{" "}
-                          <button
-                            type="button"
-                            className="font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
-                            onClick={backToInput}
-                          >
-                            Try again
-                          </button>
-                        </div>
-                      </CardContent>
-                    </form>
-                  </>
-                )}
+                  <p className="mt-4 text-center text-[11px] leading-5 text-slate-400 dark:text-slate-500">
+                    {isSignup
+                      ? "Your password is stored securely — hashed, never in plain text."
+                      : "Use the same number (or email) and password every time — no codes to wait for."}
+                  </p>
+                </CardContent>
 
                 <div className="glass-soft flex items-center justify-center gap-2 border-t border-white/60 px-6 py-3.5 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
                   <span>
