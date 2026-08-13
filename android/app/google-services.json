@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "240138006412",
+    "project_id": "free-call-c88d8",
+    "storage_bucket": "free-call-c88d8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:240138006412:android:4b84ae18dd9ec62529b0a9",
+        "android_client_info": {
+          "package_name": "com.freecall.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC33geQZ9wokN5flx2gT1WszOZVuAsCIIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
