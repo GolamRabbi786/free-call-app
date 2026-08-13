@@ -628,7 +628,8 @@ function DownloadApp() {
                 </h3>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
                   Adds Free Call to your home screen with its own app icon and
-                  window — just like a native app.
+                  window — just like a native app. You&apos;ll get call &amp;
+                  message notifications even when the app is closed.
                 </p>
                 <Button
                   type="button"
