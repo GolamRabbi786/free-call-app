@@ -194,6 +194,15 @@ function ensureFcmConfig(): FcmConfig | null {
   return { projectId, clientEmail, privateKey };
 }
 
+/**
+ * The private key from the service-account JSON uses literal `\n` escapes;
+ * depending on how it's pasted into the Keys tab it may arrive that way.
+ * Normalize to real newlines so the PEM always parses.
+ */
+function normalizePrivateKey(key: string): string {
+  return key.replace(/\\n/g, "\n");
+}
+
 /** Exchange a signed service-account JWT for an OAuth2 access token (cached ~1h). */
 async function getFcmAccessToken(fcm: FcmConfig): Promise<string | null> {
   if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60_000) {
@@ -210,7 +219,7 @@ async function getFcmAccessToken(fcm: FcmConfig): Promise<string | null> {
       exp: now + 3600,
     };
     const toSign = `${base64UrlEncode(Buffer.from(JSON.stringify(header)))}.${base64UrlEncode(Buffer.from(JSON.stringify(claims)))}`;
-    const key = createPrivateKey(fcm.privateKey);
+    const key = createPrivateKey(normalizePrivateKey(fcm.privateKey));
     const sign = createSign("sha256");
     sign.update(toSign);
     sign.end();
