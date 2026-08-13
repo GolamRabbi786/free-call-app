@@ -40,7 +40,7 @@ let seededUser: string | null = null;
 // that arrived meanwhile are newer than this timestamp and still alert.
 const sessionStartTime = Date.now();
 
-const PROMPT_KEY_PREFIX = "freecall-notif-prompted-";
+let notifPromptedThisSession = false;
 
 /**
  * Mounted once at the app root. Watches for incoming calls, active group
@@ -242,37 +242,38 @@ export function NotificationWatcher() {
     vibrateMessage();
   }, [newMessages, myId, hidden, navigate]);
 
-  // ---- One-time notification/push auto-enable ---------------------------
+  // ---- Keep push armed: whenever the app loads or regains focus (and
+  // permission is granted), silently make sure this device is subscribed — so
+  // every time the user leaves the app, notifications keep arriving.
   useEffect(() => {
     if (!myId) return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    if (!pushSupported() || !vapidPublicKey) return;
 
-    const flagKey = `${PROMPT_KEY_PREFIX}${myId}`;
-    let prompted = false;
-    try {
-      prompted = window.localStorage.getItem(flagKey) === "1";
-    } catch {
-      /* storage unavailable */
-    }
+    const arm = () => {
+      if (isPushEnabled()) return;
+      void subscribeToPush(vapidPublicKey, (args) =>
+        savePushSubscription(args),
+      ).then((ok) => setPushEnabled(ok));
+    };
+    arm();
+    const onVisibility = () => {
+      if (!document.hidden) arm();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [myId, vapidPublicKey, savePushSubscription]);
 
-    if (Notification.permission === "granted") {
-      // Already allowed — quietly make sure this device is subscribed.
-      if (vapidPublicKey && pushSupported() && !isPushEnabled()) {
-        void subscribeToPush(vapidPublicKey, (args) =>
-          savePushSubscription(args),
-        ).then((ok) => setPushEnabled(ok));
-      }
-      return;
-    }
-    if (Notification.permission === "denied" || prompted) return;
+  // ---- Ask once per session to enable notifications (needs a tap, so the
+  // toast's action button provides the user gesture).
+  useEffect(() => {
+    if (!myId) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "default") return;
+    if (notifPromptedThisSession) return;
+    notifPromptedThisSession = true;
 
-    // One-time gentle prompt (browsers need a user gesture to ask, so the
-    // toast's action button provides it).
-    try {
-      window.localStorage.setItem(flagKey, "1");
-    } catch {
-      /* storage unavailable */
-    }
     toast("Get call & message alerts even when you're not in the app", {
       action: {
         label: "Enable",

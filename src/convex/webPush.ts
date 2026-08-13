@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
 
@@ -47,6 +48,27 @@ export const saveSubscription = mutation({
       keys: { p256dh, auth },
       createdAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Send a test push to yourself so you can verify notifications end-to-end
+ * (permission + subscription + service worker + FCM) in a few seconds.
+ */
+export const sendTestToSelf = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const me = await getCurrentUser(ctx);
+    if (!me) throw new Error("Not authenticated");
+    try {
+      await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+        toUserId: me._id,
+        senderId: me._id,
+        body: "Test alert — notifications are working! 🎉",
+      });
+    } catch (error) {
+      console.warn("Test push scheduling failed:", error);
+    }
   },
 });
 

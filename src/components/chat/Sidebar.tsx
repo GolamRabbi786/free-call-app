@@ -85,6 +85,7 @@ export function Sidebar({
   const vapidPublicKey = useQuery(api.webPush.vapidPublicKey);
   const savePushSubscription = useMutation(api.webPush.saveSubscription);
   const removeFcmToken = useMutation(api.fcm.removeFcmToken);
+  const sendTestToSelf = useMutation(api.webPush.sendTestToSelf);
 
   const [query, setQuery] = useState("");
   const [editOpen, setEditOpen] = useState(false);
@@ -111,7 +112,15 @@ export function Sidebar({
         pushText =
           " (App-closed alerts still need the VAPID key set on the server — in-app alerts are on now.)";
       }
-      toast.success(`Notifications on — you'll hear about calls & messages.${pushText}`);
+      toast.success(
+        `Notifications on — you'll hear about calls & messages.${pushText}`,
+        {
+          action: {
+            label: "Send test",
+            onClick: () => void sendTestToSelf().catch(() => {}),
+          },
+        },
+      );
     } else if (result === "denied") {
       toast.error(
         "Notifications are blocked in your browser — allow them in site settings",
