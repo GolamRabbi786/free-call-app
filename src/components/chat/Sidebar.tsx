@@ -38,7 +38,7 @@ import {
   notificationPermission,
   requestNotificationPermission,
 } from "@/lib/notify";
-import { pushSupported, subscribeToPush } from "@/lib/push";
+import { pushSupported, setPushEnabled, subscribeToPush } from "@/lib/push";
 import { compressImage, uploadToConvex } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -103,6 +103,7 @@ export function Sidebar({
         const ok = await subscribeToPush(vapidPublicKey, (args) =>
           savePushSubscription(args),
         );
+        setPushEnabled(ok);
         if (ok) pushText = " Alerts will also arrive when the app is closed.";
       }
       toast.success(`Notifications on — you'll hear about calls & messages.${pushText}`);

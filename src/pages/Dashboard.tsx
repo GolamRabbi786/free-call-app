@@ -1,7 +1,8 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { AppBackground } from "@/components/AppBackground";
 import { CallOverlay } from "@/components/call/CallOverlay";
 import { ChatWindow } from "@/components/chat/ChatWindow";
@@ -31,6 +32,29 @@ export default function Dashboard() {
   const [selectedGroupId, setSelectedGroupId] = useState<Id<"groups"> | null>(
     null,
   );
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Notification popups deep-link into a specific chat: /dashboard?chat=dm:<id>
+  // or ?chat=group:<id>. Open that chat on arrival, then clean up the URL.
+  useEffect(() => {
+    const chat = searchParams.get("chat");
+    if (!chat) return;
+    setSearchParams({}, { replace: true });
+    if (chat.startsWith("dm:")) {
+      const id = chat.slice(3);
+      if (!id) return;
+      setConversationId(id as Id<"conversations">);
+      setSelectedUserId(null);
+      setSelectedGroupId(null);
+    } else if (chat.startsWith("group:")) {
+      const id = chat.slice(6);
+      if (!id) return;
+      setSelectedGroupId(id as Id<"groups">);
+      setSelectedUserId(null);
+      setConversationId(null);
+      setTab("groups");
+    }
+  }, [searchParams, setSearchParams]);
 
   const convo = useQuery(
     api.conversations.get,

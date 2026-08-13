@@ -9,7 +9,6 @@ import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { callKindValidator } from "./schema";
-import { PRESENCE_FRESH_MS } from "./webPush";
 import {
   createCipheriv,
   createECDH,
@@ -183,21 +182,17 @@ async function sendPushRequest(
 
 /* ---------- Delivery ---------- */
 
-async function isRecentlyOnline(
-  ctx: ActionCtx,
-  userId: Id<"users">,
-): Promise<boolean> {
-  return Boolean(await ctx.runQuery(api.webPush.presenceFresh, { userId }));
-}
-
+/**
+ * Push goes to every subscribed device, even ones where the user is currently
+ * online: the service worker skips the notification when a tab is focused
+ * (the in-app watcher handles that case), so background tabs and closed apps
+ * always get the alert exactly once.
+ */
 async function sendPush(
   ctx: ActionCtx,
   userId: Id<"users">,
   notification: { title: string; body: string; url: string },
 ): Promise<void> {
-  // User is in the app right now — the in-app watcher already alerts them.
-  if (await isRecentlyOnline(ctx, userId)) return;
-
   const vapid = ensureVapidKeys();
   if (!vapid) return;
 
