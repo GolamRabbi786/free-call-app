@@ -1,6 +1,7 @@
 import '@vly-ai/integrations';
 import { NotificationWatcher } from "@/components/NotificationWatcher";
 import { initAudioUnlock } from "@/lib/sounds";
+import { initTheme } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
@@ -86,6 +87,9 @@ class RootErrorBoundary extends React.Component<
 // Unlock the audio context on the first user interaction so call ringtones
 // and message dings can play (browsers block audio until a gesture).
 initAudioUnlock();
+
+// Apply the saved/system color theme before the first paint.
+initTheme();
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 

@@ -62,7 +62,7 @@ function RingAvatar({ name, id }: { name?: string; id?: string }) {
       <UserAvatar
         name={name}
         id={id}
-        className="size-28 text-3xl ring-4 ring-white/90"
+        className="size-28 text-3xl ring-4 ring-white/90 dark:ring-white/25"
       />
     </div>
   );
@@ -96,7 +96,7 @@ function ControlButton({
         danger
           ? "bg-rose-500 shadow-rose-500/40 hover:bg-rose-500/90"
           : active
-            ? "glass-strong text-slate-800"
+            ? "glass-strong text-slate-800 dark:text-slate-100"
             : "bg-sky-600/90 shadow-sky-600/40 hover:bg-sky-600",
         className,
       )}
@@ -156,10 +156,10 @@ function GroupCallScreen({
             <Users className="size-4" />
           </span>
           <div className="leading-tight">
-            <p className="text-sm font-semibold text-slate-800">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               {session.group.name} · {participants.length + 1} people
             </p>
-            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+            <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               {timer} · {isVideo ? "Group video call" : "Group voice call"}
             </p>
           </div>
@@ -175,7 +175,7 @@ function GroupCallScreen({
               return (
                 <div
                   key={participantId}
-                  className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-sky-400/60 to-indigo-400/60 ring-1 ring-white/60"
+                  className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-sky-400/60 to-indigo-400/60 ring-1 ring-white/60 dark:ring-white/25"
                 >
                   {stream ? (
                     <video
@@ -192,7 +192,7 @@ function GroupCallScreen({
                         name={member.name}
                         image={member.image}
                         id={member._id}
-                        className="size-14 text-xl ring-4 ring-white/80"
+                        className="size-14 text-xl ring-4 ring-white/80 dark:ring-white/25"
                       />
                       <p className="text-xs font-semibold text-white/90">
                         {member.name ?? "Guest"}
@@ -208,7 +208,7 @@ function GroupCallScreen({
               );
             })}
             {/* me */}
-            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-sky-400/60 to-indigo-400/60 ring-1 ring-white/60">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-sky-400/60 to-indigo-400/60 ring-1 ring-white/60 dark:ring-white/25">
               {localStream && camOn ? (
                 <video
                   ref={localVideoRef}
@@ -223,7 +223,7 @@ function GroupCallScreen({
                     name={user?.name}
                     image={user?.image}
                     id={user?._id}
-                    className="size-14 text-xl ring-4 ring-white/80"
+                    className="size-14 text-xl ring-4 ring-white/80 dark:ring-white/25"
                   />
                   <p className="text-xs font-semibold text-white/90">
                     {user?.name ?? "You"} (You)
@@ -269,10 +269,10 @@ function GroupCallScreen({
                       name={member.name}
                       image={member.image}
                       id={member._id}
-                      className="size-20 text-xl ring-4 ring-white/90 sm:size-24"
+                      className="size-20 text-xl ring-4 ring-white/90 dark:ring-white/25 sm:size-24"
                     />
                   </motion.div>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                     {member.name ?? "Guest"}
                   </p>
                 </div>
@@ -283,14 +283,14 @@ function GroupCallScreen({
                 name={user?.name}
                 image={user?.image}
                 id={user?._id}
-                className="size-20 text-xl ring-4 ring-white/90 sm:size-24"
+                className="size-20 text-xl ring-4 ring-white/90 dark:ring-white/25 sm:size-24"
               />
-              <p className="text-sm font-semibold text-slate-700">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                 {user?.name ?? "You"} (You)
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-slate-500">
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
             <motion.div
               animate={{ scale: [1, 1.25, 1], opacity: [0.6, 1, 0.6] }}
               transition={{ duration: 1.6, repeat: Infinity }}
@@ -407,10 +407,10 @@ export function CallOverlay({
                           : "Voice call"
                         : "Incoming call"}
                     </p>
-                    <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-800">
+                    <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
                       {other.name ?? "Guest"}
                     </h2>
-                    <p className="mt-1 text-slate-500">
+                    <p className="mt-1 text-slate-500 dark:text-slate-400">
                       {isCaller
                         ? "Ringing…"
                         : session.kind === "video"
@@ -475,10 +475,10 @@ export function CallOverlay({
                       <UserAvatar
                         name={other.name}
                         id={other._id}
-                        className="size-24 text-2xl ring-4 ring-white/90"
+                        className="size-24 text-2xl ring-4 ring-white/90 dark:ring-white/25"
                       />
                     </div>
-                    <p className="text-sm font-medium text-slate-600">
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
                       Waiting for {other.name ?? "them"} to connect…
                     </p>
                   </div>
@@ -492,10 +492,10 @@ export function CallOverlay({
                   <div className="glass-strong flex items-center gap-3 rounded-full py-2 pl-4 pr-5">
                     <UserAvatar name={other.name} id={other._id} className="size-8" />
                     <div className="leading-tight">
-                      <p className="text-sm font-semibold text-slate-800">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                         {other.name ?? "Guest"}
                       </p>
-                      <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                         {connectionState !== "connected" && (
                           <Loader2 className="size-3 animate-spin" />
                         )}
@@ -518,7 +518,7 @@ export function CallOverlay({
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-sky-500/20">
-                        <CameraOff className="size-5 text-slate-500" />
+                        <CameraOff className="size-5 text-slate-500 dark:text-slate-400" />
                       </div>
                     )}
                     <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/50" />
@@ -571,10 +571,10 @@ export function CallOverlay({
                     <UserAvatar
                       name={other.name}
                       id={other._id}
-                      className="size-24 text-2xl ring-4 ring-white/90 sm:size-32 sm:text-3xl"
+                      className="size-24 text-2xl ring-4 ring-white/90 dark:ring-white/25 sm:size-32 sm:text-3xl"
                     />
                   </motion.div>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                     {other.name ?? "Guest"}
                   </p>
                 </div>
@@ -590,14 +590,14 @@ export function CallOverlay({
                   <UserAvatar
                     name="You"
                     id={session.callerId === other._id ? session.calleeId : session.callerId}
-                    className="size-24 text-2xl ring-4 ring-white/90 sm:size-32 sm:text-3xl"
+                    className="size-24 text-2xl ring-4 ring-white/90 dark:ring-white/25 sm:size-32 sm:text-3xl"
                   />
-                  <p className="text-sm font-semibold text-slate-700">You</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">You</p>
                 </div>
               </div>
 
               <div className="text-center">
-                <p className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                <p className="flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   {connectionState !== "connected" && (
                     <Loader2 className="size-3.5 animate-spin" />
                   )}

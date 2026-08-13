@@ -40,7 +40,7 @@ function PopupCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.96 }}
       transition={{ duration: 0.22, ease: "easeOut" }}
-      className="glass-strong pointer-events-auto relative w-full overflow-hidden rounded-2xl border-white/70 shadow-xl shadow-sky-900/10"
+      className="glass-strong pointer-events-auto relative w-full overflow-hidden rounded-2xl border-white/70 dark:border-white/15 shadow-xl shadow-sky-900/10"
     >
       <div className="flex items-start gap-3 p-3">
         <div className="relative shrink-0">
@@ -51,16 +51,16 @@ function PopupCard({
           ) : (
             <UserAvatar name={message.senderName} className="size-10" />
           )}
-          <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-sky-500 ring-2 ring-white" />
+          <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-sky-500 ring-2 ring-white dark:ring-white/25" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
             {message.title}
-            <span className="truncate text-[10px] font-normal text-slate-400">
+            <span className="truncate text-[10px] font-normal text-slate-400 dark:text-slate-500">
               {isGroup ? "Group message" : "New message"}
             </span>
           </p>
-          <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">
+          <p className="mt-0.5 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">
             {message.body}
           </p>
         </div>
@@ -68,7 +68,7 @@ function PopupCard({
           type="button"
           aria-label="Dismiss"
           onClick={() => onDismiss(message.messageId)}
-          className="rounded-full p-1 text-slate-400 transition-colors hover:bg-white/70 hover:text-slate-600"
+          className="rounded-full p-1 text-slate-400 dark:text-slate-500 transition-colors hover: bg-white/70 dark:bg-white/10 hover:text-slate-600"
         >
           <X className="size-3.5" />
         </button>

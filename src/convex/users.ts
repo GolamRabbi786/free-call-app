@@ -73,9 +73,10 @@ export const listPeople = query({
     if (!me) return [];
 
     const cutoff = Date.now() - PRESENCE_TTL_MS;
-    const [users, presenceDocs] = await Promise.all([
+    const [users, presenceDocs, blocks] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("presence").collect(),
+      ctx.db.query("blocks").collect(),
     ]);
     const online = new Set(
       presenceDocs.filter((d) => d.updatedAt > cutoff).map((d) => d.userId),
@@ -86,8 +87,17 @@ export const listPeople = query({
         .map((d) => [d.userId, true]),
     );
 
+    // Hide people either side has blocked from the People list entirely.
+    const blocked = new Set<string>();
+    for (const b of blocks) {
+      if (b.blockerId === me._id || b.blockedId === me._id) {
+        blocked.add(b.blockerId);
+        blocked.add(b.blockedId);
+      }
+    }
+
     return users
-      .filter((u) => u._id !== me._id)
+      .filter((u) => u._id !== me._id && !blocked.has(u._id))
       .map((u) => ({
         ...u,
         isOnline: online.has(u._id),

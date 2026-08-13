@@ -38,7 +38,7 @@ function RingAvatar({ name, id }: { name?: string; id?: string }) {
       <UserAvatar
         name={name}
         id={id}
-        className="size-28 text-3xl ring-4 ring-white/90"
+        className="size-28 text-3xl ring-4 ring-white/90 dark:ring-white/25"
       />
     </div>
   );
@@ -123,10 +123,10 @@ export function CallRinger({
                   <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-700/70">
                     Incoming {call.kind === "video" ? "video" : "voice"} call
                   </p>
-                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-800">
+                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
                     {call.caller.name ?? "Guest"}
                   </h2>
-                  <p className="mt-1 text-slate-500">
+                  <p className="mt-1 text-slate-500 dark:text-slate-400">
                     {call.kind === "video"
                       ? "wants to video call you"
                       : "wants to talk to you"}
@@ -154,13 +154,13 @@ export function CallRinger({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.96 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="glass-strong pointer-events-auto fixed right-4 bottom-4 left-4 z-[90] rounded-2xl border-white/70 p-4 shadow-xl shadow-sky-900/10 sm:left-auto sm:w-80"
+            className="glass-strong pointer-events-auto fixed right-4 bottom-4 left-4 z-[90] rounded-2xl border-white/70 dark:border-white/15 p-4 shadow-xl shadow-sky-900/10 sm:left-auto sm:w-80"
           >
             <button
               type="button"
               aria-label="Dismiss"
               onClick={onDismissGroup}
-              className="absolute top-2.5 right-2.5 rounded-full p-1 text-slate-400 transition-colors hover:bg-white/70 hover:text-slate-600"
+              className="absolute top-2.5 right-2.5 rounded-full p-1 text-slate-400 dark:text-slate-500 transition-colors hover: bg-white/70 dark:bg-white/10 hover: text-slate-600 dark:text-slate-300"
             >
               <X className="size-3.5" />
             </button>
@@ -173,10 +173,10 @@ export function CallRinger({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-800">
+                <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                   {groupCall.groupName}
                 </p>
-                <p className="truncate text-xs text-slate-500">
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                   {groupCall.initiatorName} started a{" "}
                   {groupCall.kind === "video" ? "video" : "voice"} call
                 </p>

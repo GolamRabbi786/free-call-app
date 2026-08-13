@@ -2,6 +2,7 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { isBlockedEither } from "./blocks";
 import { getCurrentUser } from "./users";
 
 const MAX_MESSAGE_LENGTH = 2000;
@@ -67,6 +68,10 @@ export const send = mutation({
     if (!convo || (convo.userA !== me._id && convo.userB !== me._id)) {
       throw new Error("Not part of this conversation");
     }
+    const recipientId = convo.userA === me._id ? convo.userB : convo.userA;
+    if (await isBlockedEither(ctx, me._id, recipientId)) {
+      throw new Error("You can't message this person");
+    }
 
     const messageId = await ctx.db.insert("messages", {
       conversationId,
@@ -76,7 +81,6 @@ export const send = mutation({
     // Web Push to the other participant when they're not in the app. Never
     // let a push hiccup break sending the message itself.
     try {
-      const recipientId = convo.userA === me._id ? convo.userB : convo.userA;
       await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
         toUserId: recipientId,
         senderId: me._id,
@@ -107,6 +111,10 @@ export const sendAttachment = mutation({
     if (!convo || (convo.userA !== me._id && convo.userB !== me._id)) {
       throw new Error("Not part of this conversation");
     }
+    const recipientId = convo.userA === me._id ? convo.userB : convo.userA;
+    if (await isBlockedEither(ctx, me._id, recipientId)) {
+      throw new Error("You can't message this person");
+    }
 
     const attachment = await resolveAttachment(ctx, args);
     const messageId = await ctx.db.insert("messages", {
@@ -116,14 +124,108 @@ export const sendAttachment = mutation({
       attachment,
     });
     try {
-      const recipientId =
-        convo.userA === me._id ? convo.userB : convo.userA;
       await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
         toUserId: recipientId,
         senderId: me._id,
         body: args.name,
         conversationId: args.conversationId,
       });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return messageId;
+  },
+});
+
+/** Send a voice message (recorded blob) to a 1:1 conversation. */
+export const sendVoice = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    storageId: v.id("_storage"),
+    durationMs: v.number(),
+  },
+  handler: async (ctx, { conversationId, storageId, durationMs }) => {
+    const me = await getCurrentUser(ctx);
+    if (!me) throw new Error("Not authenticated");
+
+    const convo = await ctx.db.get(conversationId);
+    if (!convo || (convo.userA !== me._id && convo.userB !== me._id)) {
+      throw new Error("Not part of this conversation");
+    }
+    const recipientId = convo.userA === me._id ? convo.userB : convo.userA;
+    if (await isBlockedEither(ctx, me._id, recipientId)) {
+      throw new Error("You can't message this person");
+    }
+
+    const url = await ctx.storage.getUrl(storageId);
+    if (!url) throw new Error("Recording not found");
+
+    const messageId = await ctx.db.insert("messages", {
+      conversationId,
+      senderId: me._id,
+      body: "🎤 Voice message",
+      kind: "voice",
+      voice: { storageId, url, durationMs },
+    });
+    try {
+      await ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+        toUserId: recipientId,
+        senderId: me._id,
+        body: "🎤 Voice message",
+        conversationId,
+      });
+    } catch (error) {
+      console.warn("Push scheduling failed:", error);
+    }
+    return messageId;
+  },
+});
+
+/** Send a voice message (recorded blob) to a group chat. */
+export const sendGroupVoice = mutation({
+  args: {
+    groupId: v.id("groups"),
+    storageId: v.id("_storage"),
+    durationMs: v.number(),
+  },
+  handler: async (ctx, { groupId, storageId, durationMs }) => {
+    const me = await getCurrentUser(ctx);
+    if (!me) throw new Error("Not authenticated");
+
+    const isMember = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group", (q) => q.eq("groupId", groupId))
+      .filter((q) => q.eq(q.field("userId"), me._id))
+      .first();
+    if (!isMember) throw new Error("Not a member of this group");
+
+    const url = await ctx.storage.getUrl(storageId);
+    if (!url) throw new Error("Recording not found");
+
+    const messageId = await ctx.db.insert("messages", {
+      groupId,
+      senderId: me._id,
+      body: "🎤 Voice message",
+      kind: "voice",
+      voice: { storageId, url, durationMs },
+    });
+    try {
+      const members = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group", (q) => q.eq("groupId", groupId))
+        .collect();
+      await Promise.all(
+        members
+          .filter((m) => m.userId !== me._id)
+          .map((m) =>
+            ctx.scheduler.runAfter(0, api.webPushSender.notifyMessage, {
+              toUserId: m.userId,
+              senderId: me._id,
+              body: "🎤 Voice message",
+              groupId,
+            }),
+          ),
+      );
     } catch (error) {
       console.warn("Push scheduling failed:", error);
     }

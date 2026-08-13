@@ -70,13 +70,14 @@ export const stats = query({
     const session = await requireAdmin(ctx, token).catch(() => null);
     if (!session) return null;
 
-    const [users, messages, callSessions, groupCallSessions, presenceDocs] =
+    const [users, messages, callSessions, groupCallSessions, presenceDocs, blocks] =
       await Promise.all([
         ctx.db.query("users").collect(),
         ctx.db.query("messages").order("desc").take(200),
         ctx.db.query("callSessions").order("desc").take(100),
         ctx.db.query("groupCallSessions").order("desc").take(100),
         ctx.db.query("presence").collect(),
+        ctx.db.query("blocks").order("desc").take(100),
       ]);
 
     const now = Date.now();
@@ -91,6 +92,7 @@ export const stats = query({
         _id: u._id,
         name: u.name,
         email: u.email,
+        phone: u.phone,
         image: u.image,
         isAnonymous: Boolean(u.isAnonymous),
         createdAt: u._creationTime,
@@ -99,6 +101,18 @@ export const stats = query({
       };
     });
     userRows.sort((a, b) => b.createdAt - a.createdAt);
+
+    // Recent block activity (blocker -> blocked) for the admin panel.
+    const blocksList = (
+      await Promise.all(
+        blocks.map(async (b) => ({
+          _id: b._id,
+          blocker: await ctx.db.get(b.blockerId),
+          blocked: await ctx.db.get(b.blockedId),
+          createdAt: b.createdAt,
+        })),
+      )
+    ).filter((b) => b.blocker !== null && b.blocked !== null);
 
     const activity: ActivityItem[] = [];
     for (const m of messages) {
@@ -145,7 +159,25 @@ export const stats = query({
       ].length,
       users: userRows.slice(0, 100),
       activity: activity.slice(0, 25),
+      blocks: blocksList.map((b) => ({
+        _id: b._id,
+        blockerId: b.blocker!._id,
+        blockerName: b.blocker!.name ?? "Guest",
+        blockedId: b.blocked!._id,
+        blockedName: b.blocked!.name ?? "Guest",
+        createdAt: b.createdAt,
+      })),
     };
+  },
+});
+
+/** Admin-only: remove a block so the two people can chat/call again. */
+export const unblock = mutation({
+  args: { token: v.string(), blockId: v.id("blocks") },
+  handler: async (ctx, { token, blockId }) => {
+    await requireAdmin(ctx, token);
+    const block = await ctx.db.get(blockId);
+    if (block) await ctx.db.delete(block._id);
   },
 });
 

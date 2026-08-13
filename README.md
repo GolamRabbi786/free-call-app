@@ -298,3 +298,29 @@ bun run android:apk
 Call notifications use the bundled ringtone (`res/raw/freecall_ring.wav`,
 regenerate with `bun run scripts/generate-ringtone.mjs`). Message
 notifications use the default sound. Web/PWA push is separate (VAPID keys).
+
+## Phone-number login (OTP) — setup
+
+Sign-in is phone-first: enter your number, receive a 6-digit SMS code, done.
+Guest login was removed. To deliver SMS codes, add these keys to the
+Keys/API keys tab (Twilio):
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_PHONE_NUMBER`
+
+Create a Twilio account, buy a phone number, then paste the three values in.
+Without them, the auth page shows a clear "SMS is not configured yet"
+message. Email login still works as a fallback.
+
+## Voice messages, dark mode & blocking
+
+- **Voice messages**: tap the mic 🎤 in a chat to record (up to 60 s), then
+  send — works in 1:1 and group chats. Recordings are stored in Convex
+  storage and play inline with a progress bar.
+- **Dark mode**: the sun/moon button in the top bar (landing, auth, sidebar,
+  admin) toggles the theme; your choice is saved and system preference is
+  used on first visit.
+- **Blocking**: People tab → hover a person → 🚫 button. Blocked people can't
+  message or call you, and disappear from People/chats/groups. Manage blocks
+  in the "Blocked" section of the People tab, or from the admin panel.

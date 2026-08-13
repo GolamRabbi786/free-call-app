@@ -3,14 +3,18 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { format, isToday, isYesterday } from "date-fns";
 import {
+  Ban,
   Bell,
   BellRing,
   Camera,
   Loader2,
   LogOut,
+  Moon,
   Pencil,
   Phone,
   Search,
+  ShieldOff,
+  Sun,
   Users,
   Video,
   Wifi,
@@ -41,6 +45,7 @@ import {
 } from "@/lib/notify";
 import { pushSupported, setPushEnabled, subscribeToPush } from "@/lib/push";
 import { compressImage, uploadToConvex } from "@/lib/upload";
+import { getTheme, toggleTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -78,6 +83,7 @@ export function Sidebar({
   const groups = useQuery(api.groups.listForMe);
   const people = useQuery(api.users.listPeople);
   const onlineUsers = useQuery(api.presence.onlineUsers);
+  const blocked = useQuery(api.blocks.myBlocked);
   const updateProfile = useMutation(api.users.updateProfile);
   const updateProfileImage = useMutation(api.users.updateProfileImage);
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
@@ -86,6 +92,8 @@ export function Sidebar({
   const savePushSubscription = useMutation(api.webPush.saveSubscription);
   const removeFcmToken = useMutation(api.fcm.removeFcmToken);
   const sendTestToSelf = useMutation(api.webPush.sendTestToSelf);
+  const blockUser = useMutation(api.blocks.blockUser);
+  const unblockUser = useMutation(api.blocks.unblockUser);
 
   const [query, setQuery] = useState("");
   const [editOpen, setEditOpen] = useState(false);
@@ -94,6 +102,42 @@ export function Sidebar({
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [notifPerm, setNotifPerm] = useState(() => notificationPermission());
+  const [theme, setTheme] = useState<"light" | "dark">(() => getTheme());
+  const [blockConfirmId, setBlockConfirmId] = useState<Id<"users"> | null>(null);
+
+  const handleThemeToggle = () => {
+    setTheme(toggleTheme());
+  };
+
+  const handleBlock = async (userId: Id<"users">) => {
+    if (blockConfirmId !== userId) {
+      setBlockConfirmId(userId);
+      toast.info("Click the block button again to confirm", {
+        duration: 3000,
+      });
+      return;
+    }
+    setBlockConfirmId(null);
+    try {
+      await blockUser({ userId });
+      toast.success("User blocked — they can't message or call you anymore");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not block this user",
+      );
+    }
+  };
+
+  const handleUnblock = async (userId: Id<"users">) => {
+    try {
+      await unblockUser({ userId });
+      toast.success("User unblocked");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not unblock",
+      );
+    }
+  };
 
   const enableNotifications = async () => {
     const result = await requestNotificationPermission();
@@ -287,22 +331,38 @@ export function Sidebar({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-bold leading-tight tracking-tight text-slate-800">
+          <p className="text-lg font-bold leading-tight tracking-tight text-slate-800 dark:text-slate-100">
             Free Call
           </p>
-          <p className="text-[11px] text-slate-500">Voice, video &amp; chat</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Voice, video &amp; chat
+          </p>
         </div>
         <div className="flex items-center gap-0.5">
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700"
+            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+            onClick={handleThemeToggle}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
             onClick={() => void enableNotifications()}
             title={notifTitle}
           >
             {notifPerm === "granted" ? (
-              <BellRing className="size-4 text-emerald-500" />
+              <BellRing className="size-4 text-emerald-500 dark:text-emerald-400" />
             ) : (
               <Bell className="size-4" />
             )}
@@ -311,7 +371,7 @@ export function Sidebar({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700"
+            className="rounded-full text-slate-500 hover:bg-white/60 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
             onClick={handleSignOut}
             title="Sign out"
           >
@@ -321,7 +381,7 @@ export function Sidebar({
       </div>
 
       {/* my profile */}
-      <div className="mx-4 mt-1 flex items-center gap-3 rounded-2xl border border-white/60 bg-white/45 px-3 py-2.5">
+      <div className="mx-4 mt-1 flex items-center gap-3 rounded-2xl border border-white/60 bg-white/45 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.06]">
         <div className="relative shrink-0">
           <UserAvatar
             name={user?.name}
@@ -335,7 +395,7 @@ export function Sidebar({
             title="Change profile picture"
             aria-label="Change profile picture"
             disabled={uploadingPhoto}
-            className="btn-gradient absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full text-white shadow ring-2 ring-white transition-transform hover:scale-110 disabled:opacity-70"
+            className="btn-gradient absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full text-white shadow ring-2 ring-white transition-transform hover:scale-110 disabled:opacity-70 dark:ring-white/25"
           >
             {uploadingPhoto ? (
               <Loader2 className="size-2.5 animate-spin" />
@@ -352,10 +412,10 @@ export function Sidebar({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-800">
-            {user?.name ?? "Guest"}
+          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+            {user?.name ?? user?.phone ?? "Guest"}
           </p>
-          <p className="flex items-center gap-1 text-[11px] text-emerald-600">
+          <p className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
             <Wifi className="size-3" /> You&apos;re online
           </p>
         </div>
@@ -363,7 +423,7 @@ export function Sidebar({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="rounded-full text-slate-500 hover:bg-white/70 hover:text-slate-700"
+          className="rounded-full text-slate-500 hover:bg-white/70 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
           onClick={openEdit}
           title="Edit display name"
         >
@@ -374,14 +434,14 @@ export function Sidebar({
       {/* search */}
       <div className="px-4 pt-3">
         <div className="relative">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={
               tab === "groups" ? "Search groups…" : "Search people…"
             }
-            className="glass-soft rounded-xl border-white/70 pl-9 text-sm"
+            className="glass-soft rounded-xl border-white/70 pl-9 text-sm dark:border-white/15"
           />
         </div>
       </div>
@@ -395,19 +455,19 @@ export function Sidebar({
           <TabsList className="glass-soft w-full rounded-xl">
             <TabsTrigger
               value="chats"
-              className="flex-1 rounded-lg data-[state=active]:bg-white/80"
+              className="flex-1 rounded-lg data-[state=active]:bg-white/80 dark:data-[state=active]:bg-white/15"
             >
               Chats
             </TabsTrigger>
             <TabsTrigger
               value="groups"
-              className="flex-1 rounded-lg data-[state=active]:bg-white/80"
+              className="flex-1 rounded-lg data-[state=active]:bg-white/80 dark:data-[state=active]:bg-white/15"
             >
               Groups
             </TabsTrigger>
             <TabsTrigger
               value="people"
-              className="flex-1 rounded-lg data-[state=active]:bg-white/80"
+              className="flex-1 rounded-lg data-[state=active]:bg-white/80 dark:data-[state=active]:bg-white/15"
             >
               People
             </TabsTrigger>
@@ -420,11 +480,11 @@ export function Sidebar({
         {tab === "chats" ? (
           <div className="flex flex-col gap-1">
             {!conversations ? (
-              <p className="px-3 py-6 text-center text-xs text-slate-400">
+              <p className="px-3 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
                 Loading…
               </p>
             ) : conversations.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs leading-5 text-slate-400">
+              <p className="px-3 py-6 text-center text-xs leading-5 text-slate-400 dark:text-slate-500">
                 No chats yet.
                 <br />
                 Head to People and start one!
@@ -444,8 +504,8 @@ export function Sidebar({
                     className={cn(
                       "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors",
                       active
-                        ? "bg-white/80 shadow-sm ring-1 ring-white/70"
-                        : "hover:bg-white/50",
+                        ? "bg-white/80 shadow-sm ring-1 ring-white/70 dark:bg-white/10 dark:ring-white/20"
+                        : "hover:bg-white/50 dark:hover:bg-white/[0.07]",
                     )}
                   >
                     <div className="relative">
@@ -457,23 +517,23 @@ export function Sidebar({
                       />
                       <span
                         className={cn(
-                          "absolute -right-0.5 -bottom-0.5 size-3 rounded-full ring-2 ring-white",
-                          online ? "bg-emerald-500" : "bg-slate-300",
+                          "absolute -right-0.5 -bottom-0.5 size-3 rounded-full ring-2 ring-white dark:ring-white/25",
+                          online ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600",
                         )}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-slate-800">
+                        <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                           {otherUser.name ?? "Guest"}
                         </p>
                         {lastMessage && (
-                          <span className="shrink-0 text-[10px] text-slate-400">
+                          <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
                             {conversationTime(lastMessage._creationTime)}
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-xs text-slate-500">
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                         {lastMessage
                           ? lastMessage.kind === "call"
                             ? `${lastMessage.senderId === user?._id ? "You: " : ""}${describeCallMessage(lastMessage)}`
@@ -504,11 +564,11 @@ export function Sidebar({
               New group
             </Button>
             {!groups ? (
-              <p className="px-3 py-6 text-center text-xs text-slate-400">
+              <p className="px-3 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
                 Loading…
               </p>
             ) : groups.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs leading-5 text-slate-400">
+              <p className="px-3 py-6 text-center text-xs leading-5 text-slate-400 dark:text-slate-500">
                 No groups yet.
                 <br />
                 Create one and call everyone together!
@@ -522,8 +582,8 @@ export function Sidebar({
                   className={cn(
                     "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors",
                     group._id === activeGroupId
-                      ? "bg-white/80 shadow-sm ring-1 ring-white/70"
-                      : "hover:bg-white/50",
+                      ? "bg-white/80 shadow-sm ring-1 ring-white/70 dark:bg-white/10 dark:ring-white/20"
+                      : "hover:bg-white/50 dark:hover:bg-white/[0.07]",
                   )}
                 >
                   <div className="relative shrink-0">
@@ -535,13 +595,13 @@ export function Sidebar({
                             name={m.name}
                             image={m.image}
                             id={m._id}
-                            className="size-9 ring-2 ring-white"
+                            className="size-9 ring-2 ring-white dark:ring-white/25"
                           />
                         ))}
                       </div>
                     ) : (
-                      <Avatar className="size-9 ring-2 ring-white/80">
-                        <AvatarFallback className="bg-sky-100 font-semibold text-sky-600">
+                      <Avatar className="size-9 ring-2 ring-white/80 dark:ring-white/25">
+                        <AvatarFallback className="bg-sky-100 font-semibold text-sky-600 dark:bg-sky-500/20 dark:text-sky-300">
                           <Users className="size-4" />
                         </AvatarFallback>
                       </Avatar>
@@ -549,16 +609,16 @@ export function Sidebar({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-800">
+                      <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                         {group.name}
                       </p>
                       {lastMessage && (
-                        <span className="shrink-0 text-[10px] text-slate-400">
+                        <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
                           {conversationTime(lastMessage._creationTime)}
                         </span>
                       )}
                     </div>
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                       {lastMessage
                         ? groupPreview(lastMessage)
                         : `${memberCount} members`}
@@ -571,20 +631,20 @@ export function Sidebar({
         ) : (
           <div className="flex flex-col gap-1">
             {!filteredPeople ? (
-              <p className="px-3 py-6 text-center text-xs text-slate-400">
+              <p className="px-3 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
                 Loading…
               </p>
             ) : filteredPeople.length === 0 ? (
               <div className="px-3 py-8 text-center">
-                <Avatar className="mx-auto size-12 ring-2 ring-white/80">
-                  <AvatarFallback className="bg-sky-100 font-semibold text-sky-600">
+                <Avatar className="mx-auto size-12 ring-2 ring-white/80 dark:ring-white/25">
+                  <AvatarFallback className="bg-sky-100 font-semibold text-sky-600 dark:bg-sky-500/20 dark:text-sky-300">
                     {query ? "0" : "👋"}
                   </AvatarFallback>
                 </Avatar>
-                <p className="mt-3 text-sm font-medium text-slate-600">
+                <p className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">
                   {query ? "No one matches that name" : "No one here yet"}
                 </p>
-                <p className="mx-auto mt-1 max-w-[200px] text-xs leading-5 text-slate-400">
+                <p className="mx-auto mt-1 max-w-[200px] text-xs leading-5 text-slate-400 dark:text-slate-500">
                   {query
                     ? "Try a different name."
                     : "Sign in from another browser or device with a different account to see them here."}
@@ -599,7 +659,9 @@ export function Sidebar({
                     key={person._id}
                     className={cn(
                       "group flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors",
-                      active ? "bg-white/80 shadow-sm ring-1 ring-white/70" : "hover:bg-white/50",
+                      active
+                        ? "bg-white/80 shadow-sm ring-1 ring-white/70 dark:bg-white/10 dark:ring-white/20"
+                        : "hover:bg-white/50 dark:hover:bg-white/[0.07]",
                     )}
                   >
                     <button
@@ -616,23 +678,25 @@ export function Sidebar({
                         />
                         <span
                           className={cn(
-                            "absolute -right-0.5 -bottom-0.5 size-3 rounded-full ring-2 ring-white",
-                            status?.online ? "bg-emerald-500" : "bg-slate-300",
+                            "absolute -right-0.5 -bottom-0.5 size-3 rounded-full ring-2 ring-white dark:ring-white/25",
+                            status?.online
+                              ? "bg-emerald-500"
+                              : "bg-slate-300 dark:bg-slate-600",
                           )}
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-800">
-                          {person.name ?? "Guest"}
+                        <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {person.name ?? person.phone ?? "Guest"}
                         </p>
                         <p
                           className={cn(
                             "text-[11px]",
                             status?.inCall
-                              ? "text-sky-600"
+                              ? "text-sky-600 dark:text-sky-300"
                               : status?.online
-                                ? "text-emerald-600"
-                                : "text-slate-400",
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-slate-400 dark:text-slate-500",
                           )}
                         >
                           {status?.inCall
@@ -648,7 +712,7 @@ export function Sidebar({
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        className="rounded-full text-sky-700 hover:bg-sky-500/10 hover:text-sky-700"
+                        className="rounded-full text-sky-700 hover:bg-sky-500/10 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-300"
                         onClick={() => onStartCall(person._id, "audio")}
                         title="Free voice call"
                       >
@@ -658,16 +722,78 @@ export function Sidebar({
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        className="rounded-full text-sky-700 hover:bg-sky-500/10 hover:text-sky-700"
+                        className="rounded-full text-sky-700 hover:bg-sky-500/10 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-300"
                         onClick={() => onStartCall(person._id, "video")}
                         title="Free video call"
                       >
                         <Video className="size-4" />
                       </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className={cn(
+                          "rounded-full",
+                          blockConfirmId === person._id
+                            ? "bg-rose-500 text-white hover:bg-rose-500"
+                            : "text-rose-500 hover:bg-rose-500/10",
+                        )}
+                        onClick={() => void handleBlock(person._id)}
+                        title={
+                          blockConfirmId === person._id
+                            ? "Click again to confirm blocking"
+                            : "Block this user"
+                        }
+                      >
+                        <Ban className="size-4" />
+                      </Button>
                     </div>
                   </div>
                 );
               })
+            )}
+
+            {/* blocked list */}
+            {blocked && blocked.length > 0 && (
+              <div className="mt-3 border-t border-white/60 pt-3 dark:border-white/10">
+                <p className="flex items-center gap-1.5 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  <ShieldOff className="size-3.5" />
+                  Blocked ({blocked.length})
+                </p>
+                <div className="flex flex-col gap-1">
+                  {blocked.map((person) => (
+                    <div
+                      key={person._id}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-2"
+                    >
+                      <UserAvatar
+                        name={person.name}
+                        image={person.image}
+                        id={person._id}
+                        className="size-8 opacity-70"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-600 dark:text-slate-300">
+                          {person.name ?? "Guest"}
+                        </p>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                          Can&apos;t message or call
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 rounded-full text-slate-500 hover:bg-white/70 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                        onClick={() => void handleUnblock(person._id)}
+                        title="Unblock"
+                      >
+                        <ShieldOff className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -675,7 +801,7 @@ export function Sidebar({
 
       {/* edit name dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="glass-strong max-w-sm rounded-3xl border-white/70">
+        <DialogContent className="glass-strong max-w-sm rounded-3xl border-white/70 dark:border-white/15">
           <DialogHeader>
             <DialogTitle>Edit display name</DialogTitle>
             <DialogDescription>
@@ -686,7 +812,7 @@ export function Sidebar({
             value={nameDraft}
             onChange={(e) => setNameDraft(e.target.value)}
             placeholder="Your name"
-            className="glass-soft rounded-xl border-white/70"
+            className="glass-soft rounded-xl border-white/70 dark:border-white/15"
             maxLength={40}
             onKeyDown={(e) => {
               if (e.key === "Enter") void saveName();
@@ -714,7 +840,7 @@ export function Sidebar({
 
       {/* create group dialog */}
       <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
-        <DialogContent className="glass-strong max-w-md rounded-3xl border-white/70">
+        <DialogContent className="glass-strong max-w-md rounded-3xl border-white/70 dark:border-white/15">
           <DialogHeader>
             <DialogTitle>New group</DialogTitle>
             <DialogDescription>
@@ -725,16 +851,16 @@ export function Sidebar({
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
             placeholder="Group name (e.g. Family, Office, Friends)"
-            className="glass-soft rounded-xl border-white/70"
+            className="glass-soft rounded-xl border-white/70 dark:border-white/15"
             maxLength={60}
           />
-          <div className="max-h-52 min-h-0 overflow-y-auto rounded-2xl border border-white/60 bg-white/40 p-2">
+          <div className="max-h-52 min-h-0 overflow-y-auto rounded-2xl border border-white/60 bg-white/40 p-2 dark:border-white/10 dark:bg-white/[0.06]">
             {!people ? (
-              <p className="px-3 py-4 text-center text-xs text-slate-400">
+              <p className="px-3 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
                 Loading people…
               </p>
             ) : people.length === 0 ? (
-              <p className="px-3 py-4 text-center text-xs text-slate-400">
+              <p className="px-3 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
                 No one else to add yet — sign in from another account first.
               </p>
             ) : (
@@ -743,7 +869,7 @@ export function Sidebar({
                 return (
                   <label
                     key={person._id}
-                    className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/70"
+                    className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/70 dark:hover:bg-white/10"
                   >
                     <Checkbox
                       checked={checked}
@@ -757,15 +883,15 @@ export function Sidebar({
                       id={person._id}
                       className="size-8"
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
-                      {person.name ?? "Guest"}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {person.name ?? person.phone ?? "Guest"}
                     </span>
                     <span
                       className={cn(
                         "text-[10px]",
                         onlineMap.has(person._id)
-                          ? "text-emerald-600"
-                          : "text-slate-400",
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-slate-400 dark:text-slate-500",
                       )}
                     >
                       {onlineMap.has(person._id) ? "Online" : ""}

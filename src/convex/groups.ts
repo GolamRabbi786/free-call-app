@@ -1,5 +1,7 @@
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { isBlockedEither } from "./blocks";
 import { getCurrentUser } from "./users";
 
 const MAX_GROUP_NAME = 60;
@@ -14,7 +16,14 @@ export const create = mutation({
     const trimmed = name.trim().slice(0, MAX_GROUP_NAME);
     if (!trimmed) throw new Error("Group name cannot be empty");
 
-    const unique = [...new Set([me._id, ...memberIds])];
+    // Never add people either side has blocked.
+    const filtered: Id<"users">[] = [];
+    for (const userId of memberIds) {
+      if (!(await isBlockedEither(ctx, me._id, userId))) {
+        filtered.push(userId);
+      }
+    }
+    const unique = [...new Set([me._id, ...filtered])];
     if (unique.length < 2) {
       throw new Error("Pick at least one other person for the group");
     }

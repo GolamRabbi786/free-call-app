@@ -41,9 +41,23 @@ const schema = defineSchema(
       email: v.optional(v.string()), // email of the user. do not remove
       emailVerificationTime: v.optional(v.number()), // email verification time. do not remove
       isAnonymous: v.optional(v.boolean()), // is the user anonymous. do not remove
+      phone: v.optional(v.string()), // E.164 phone number used for phone login
+      phoneVerificationTime: v.optional(v.number()), // when the phone was verified
 
       role: v.optional(roleValidator), // role of the user. do not remove
-    }).index("email", ["email"]), // index for the email. do not remove or modify
+    })
+      .index("email", ["email"])
+      .index("phone", ["phone"]), // index for the email/phone. do not remove or modify
+
+    // One row per (blocker -> blocked) pair. Blocking hides the person from
+    // People/Charts, and blocks new messages + calls in both directions.
+    blocks: defineTable({
+      blockerId: v.id("users"),
+      blockedId: v.id("users"),
+      createdAt: v.number(),
+    })
+      .index("by_blocker", ["blockerId"])
+      .index("by_blocked", ["blockedId"]),
 
     // 1:1 conversations. userA / userB are the two participant ids sorted
     // lexicographically so a pair always maps to a single row.
@@ -61,8 +75,16 @@ const schema = defineSchema(
       groupId: v.optional(v.id("groups")),
       senderId: v.id("users"),
       body: v.string(),
-      // "text" (default) or "call" — a call-history entry rendered in the chat.
-      kind: v.optional(v.union(v.literal("text"), v.literal("call"))),
+      // "text" (default), "voice" or "call" — a call-history entry rendered in the chat.
+      kind: v.optional(v.union(v.literal("text"), v.literal("voice"), v.literal("call"))),
+      // A voice message (MediaRecorder blob uploaded to Convex storage).
+      voice: v.optional(
+        v.object({
+          storageId: v.id("_storage"),
+          url: v.string(),
+          durationMs: v.number(),
+        }),
+      ),
       callKind: v.optional(callKindValidator),
       callStatus: v.optional(callStatusValidator),
       callDurationMs: v.optional(v.number()),

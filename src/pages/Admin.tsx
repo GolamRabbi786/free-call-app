@@ -5,12 +5,16 @@ import { format } from "date-fns";
 import {
   Activity,
   Archive,
+  Ban,
   Download,
   Loader2,
   LogOut,
   MessageSquare,
+  Moon,
   Phone,
   ShieldCheck,
+  ShieldOff,
+  Sun,
   Trash2,
   Upload,
   UserPlus,
@@ -23,6 +27,7 @@ import { toast } from "sonner";
 import { AppBackground } from "@/components/AppBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getTheme, toggleTheme } from "@/lib/theme";
 import logo from "@/assets/logo.svg";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -59,6 +64,7 @@ type Stats = {
     _id: Id<"users">;
     name?: string;
     email?: string;
+    phone?: string;
     image?: string;
     isAnonymous: boolean;
     createdAt: number;
@@ -70,6 +76,14 @@ type Stats = {
     type: "message" | "call";
     text: string;
     at: number;
+  }[];
+  blocks: {
+    _id: Id<"blocks">;
+    blockerId: Id<"users">;
+    blockerName: string;
+    blockedId: Id<"users">;
+    blockedName: string;
+    createdAt: number;
   }[];
 };
 
@@ -87,7 +101,7 @@ function StatCard({
   return (
     <div className="glass rounded-3xl p-5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {label}
         </p>
         <span
@@ -99,7 +113,7 @@ function StatCard({
           {icon}
         </span>
       </div>
-      <p className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900">
+      <p className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
         {value}
       </p>
     </div>
@@ -119,7 +133,7 @@ function LoginForm({
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center px-4">
       <AppBackground />
-      <div className="glass-strong relative w-full max-w-sm rounded-3xl border-white/70 p-8 text-center">
+      <div className="glass-strong relative w-full max-w-sm rounded-3xl border-white/70 dark:border-white/15 p-8 text-center">
         <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-sky-300/40 blur-3xl" />
         <div className="relative">
           <div className="mx-auto size-14 overflow-hidden rounded-2xl shadow-lg">
@@ -130,8 +144,8 @@ function LoginForm({
               draggable={false}
             />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">Admin Panel</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="mt-4 text-2xl font-bold text-slate-900 dark:text-slate-50">Admin Panel</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Sign in to manage Free Call users.
           </p>
 
@@ -147,7 +161,7 @@ function LoginForm({
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Admin username"
               autoComplete="username"
-              className="glass-soft rounded-xl border-white/70"
+              className="glass-soft rounded-xl border-white/70 dark:border-white/15"
               required
             />
             <Input
@@ -156,7 +170,7 @@ function LoginForm({
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               autoComplete="current-password"
-              className="glass-soft rounded-xl border-white/70"
+              className="glass-soft rounded-xl border-white/70 dark:border-white/15"
               required
             />
             <Button
@@ -189,6 +203,7 @@ export default function AdminPage() {
   const login = useMutation(api.admin.login);
   const logout = useMutation(api.admin.logout);
   const removeUser = useMutation(api.admin.removeUser);
+  const unblock = useMutation(api.admin.unblock);
   const updateZipStart = useMutation(api.admin.updateProjectZipStart);
   const updateZipChunk = useMutation(api.admin.updateProjectZipChunk);
   const getZipChunk = useMutation(api.admin.getProjectZipChunk);
@@ -199,6 +214,11 @@ export default function AdminPage() {
   const [uploadingZip, setUploadingZip] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const zipInputRef = useRef<HTMLInputElement>(null);
+  const [theme, setTheme] = useState<"light" | "dark">(() => getTheme());
+
+  const handleThemeToggle = () => {
+    setTheme(toggleTheme());
+  };
 
   const handleZipFile = async (files: FileList | null) => {
     const file = files?.[0];
@@ -318,6 +338,17 @@ export default function AdminPage() {
     }
   };
 
+  const handleUnblock = async (blockId: Id<"blocks">) => {
+    try {
+      await unblock({ token, blockId });
+      toast.success("Block removed");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not remove the block",
+      );
+    }
+  };
+
   const data = stats;
 
   return (
@@ -336,8 +367,8 @@ export default function AdminPage() {
               />
             </div>
             <div className="leading-tight">
-              <p className="text-base font-bold text-slate-800">Admin Panel</p>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-base font-bold text-slate-800 dark:text-slate-100">Admin Panel</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Free Call · user control &amp; activity
               </p>
             </div>
@@ -346,7 +377,21 @@ export default function AdminPage() {
             <Button
               type="button"
               variant="ghost"
-              className="rounded-full text-slate-600 hover:bg-white/70"
+              size="icon"
+              className="rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-white/10"
+              onClick={handleThemeToggle}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? (
+                <Sun className="size-4" />
+              ) : (
+                <Moon className="size-4" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-white/10"
               onClick={() => navigate("/")}
             >
               View site
@@ -354,7 +399,7 @@ export default function AdminPage() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-full text-rose-600 hover:bg-rose-500/10"
+              className="rounded-full text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
               onClick={() => void handleLogout()}
             >
               <LogOut className="size-4" />
@@ -365,7 +410,7 @@ export default function AdminPage() {
 
         {data === undefined ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="size-6 animate-spin text-sky-600" />
+            <Loader2 className="size-6 animate-spin text-sky-600 dark:text-sky-300" />
           </div>
         ) : data === null ? null : (
           <>
@@ -373,14 +418,14 @@ export default function AdminPage() {
             <div className="glass mt-5 rounded-3xl p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-300">
                     <Archive className="size-5" />
                   </span>
                   <div className="min-w-0">
-                    <h2 className="text-sm font-bold text-slate-800">
+                    <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
                       Project source ZIP
                     </h2>
-                    <p className="truncate text-[11px] text-slate-400">
+                    <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
                       {zipMeta
                         ? `${zipMeta.fileName} · ${formatBytes(zipMeta.size)}`
                         : "Nothing stored yet — upload the current project ZIP so only admins can download it."}
@@ -398,7 +443,7 @@ export default function AdminPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-full text-slate-600 hover:bg-white/70"
+                    className="rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-white/10"
                     disabled={uploadingZip}
                     onClick={() => zipInputRef.current?.click()}
                   >
@@ -431,7 +476,7 @@ export default function AdminPage() {
                 </div>
               </div>
               {zipMeta && (
-                <p className="mt-2 text-[10px] text-slate-400">
+                <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
                   Stored {format(zipMeta.updatedAt, "MMM d · h:mm a")} · only
                   visible to the admin panel
                 </p>
@@ -443,25 +488,25 @@ export default function AdminPage() {
               <StatCard
                 label="Total users"
                 value={data.totalUsers}
-                icon={<Users className="size-4 text-sky-600" />}
+                icon={<Users className="size-4 text-sky-600 dark:text-sky-300" />}
                 accent="bg-sky-500/10"
               />
               <StatCard
                 label="New today"
                 value={data.newToday}
-                icon={<UserPlus className="size-4 text-emerald-600" />}
+                icon={<UserPlus className="size-4 text-emerald-600 dark:text-emerald-400" />}
                 accent="bg-emerald-500/10"
               />
               <StatCard
                 label="Messages today"
                 value={data.messagesToday}
-                icon={<MessageSquare className="size-4 text-indigo-600" />}
+                icon={<MessageSquare className="size-4 text-indigo-600 dark:text-indigo-300" />}
                 accent="bg-indigo-500/10"
               />
               <StatCard
                 label="Calls today"
                 value={data.callsToday}
-                icon={<Phone className="size-4 text-violet-600" />}
+                icon={<Phone className="size-4 text-violet-600 dark:text-violet-300" />}
                 accent="bg-violet-500/10"
               />
             </div>
@@ -470,21 +515,21 @@ export default function AdminPage() {
               {/* users */}
               <div className="glass rounded-3xl p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-slate-800">Users</h2>
-                  <p className="text-[11px] text-slate-400">
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Users</h2>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
                     {data.users.length} shown · newest first
                   </p>
                 </div>
                 <div className="mt-3 flex flex-col gap-1.5">
                   {data.users.length === 0 ? (
-                    <p className="px-3 py-8 text-center text-xs text-slate-400">
+                    <p className="px-3 py-8 text-center text-xs text-slate-400 dark:text-slate-500">
                       No users yet.
                     </p>
                   ) : (
                     data.users.map((u) => (
                       <div
                         key={u._id}
-                        className="flex items-center gap-3 rounded-2xl px-2.5 py-2 transition-colors hover:bg-white/50"
+                        className="flex items-center gap-3 rounded-2xl px-2.5 py-2 transition-colors hover:bg-white/50 dark:hover:bg-white/[0.07]"
                       >
                         <UserAvatar
                           name={u.name}
@@ -493,16 +538,17 @@ export default function AdminPage() {
                           className="size-9"
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-800">
+                          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                             {u.name ?? "Guest"}
                             {u.isAnonymous && (
-                              <span className="ml-1.5 rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-bold text-sky-600">
+                              <span className="ml-1.5 rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-bold text-sky-600 dark:text-sky-300">
                                 GUEST
                               </span>
                             )}
                           </p>
-                          <p className="truncate text-[11px] text-slate-400">
-                            {u.email ?? "no email"} · joined{" "}
+                          <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                            {u.phone ?? u.email ?? "no contact"}
+                            {u.phone && u.email ? ` · ${u.email}` : ""} · joined{" "}
                             {format(u.createdAt, "MMM d, yyyy")}
                           </p>
                         </div>
@@ -530,7 +576,7 @@ export default function AdminPage() {
                             "shrink-0 rounded-full",
                             confirmUserId === u._id
                               ? "bg-rose-500 text-white hover:bg-rose-500"
-                              : "text-rose-500 hover:bg-rose-500/10",
+                              : " text-rose-500 dark:text-rose-400 hover:bg-rose-500/10",
                           )}
                           title={
                             confirmUserId === u._id
@@ -545,37 +591,92 @@ export default function AdminPage() {
                     ))
                   )}
                 </div>
-                <p className="mt-3 text-[10px] text-slate-400">
+                <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
                   Removing a user deletes their account, chats, calls and files
                   permanently.
+                </p>
+              </div>
+
+              {/* blocked users */}
+              <div className="glass rounded-3xl p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Ban className="size-4 text-rose-500 dark:text-rose-400" />
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    Blocked users
+                  </h2>
+                  <span className="ml-auto rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                    {data.blocks.length}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-col gap-2">
+                  {data.blocks.length === 0 ? (
+                    <p className="px-3 py-8 text-center text-xs text-slate-400 dark:text-slate-500">
+                      No blocks — everyone can chat freely.
+                    </p>
+                  ) : (
+                    data.blocks.map((b) => (
+                      <div
+                        key={b._id}
+                        className="flex items-center gap-2.5 rounded-2xl bg-white/40 px-3 py-2.5 dark:bg-white/[0.06]"
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500 dark:text-rose-400">
+                          <ShieldOff className="size-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs leading-5 text-slate-600 dark:text-slate-300">
+                            <span className="font-semibold">{b.blockerName}</span>
+                            {" "}blocked{" "}
+                            <span className="font-semibold">{b.blockedName}</span>
+                          </p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                            {format(b.createdAt, "MMM d · h:mm a")}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="shrink-0 rounded-full text-slate-500 hover:bg-white/70 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                          title="Remove this block"
+                          onClick={() => void handleUnblock(b._id)}
+                        >
+                          <ShieldOff className="size-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
+                  Blocked people can't message or call each other. Admins can
+                  lift a block anytime.
                 </p>
               </div>
 
               {/* activity */}
               <div className="glass rounded-3xl p-4 sm:p-5">
                 <div className="flex items-center gap-2">
-                  <Activity className="size-4 text-sky-600" />
-                  <h2 className="text-sm font-bold text-slate-800">
+                  <Activity className="size-4 text-sky-600 dark:text-sky-300" />
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
                     Recent activity
                   </h2>
                 </div>
                 <div className="mt-3 flex flex-col gap-2.5">
                   {data.activity.length === 0 ? (
-                    <p className="px-3 py-8 text-center text-xs text-slate-400">
+                    <p className="px-3 py-8 text-center text-xs text-slate-400 dark:text-slate-500">
                       Nothing yet — activity shows here as people chat and call.
                     </p>
                   ) : (
                     data.activity.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-start gap-2.5 rounded-2xl bg-white/40 px-3 py-2.5"
+                        className="flex items-start gap-2.5 rounded-2xl bg-white/40 dark:bg-white/[0.06] px-3 py-2.5"
                       >
                         <span
                           className={cn(
                             "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg",
                             item.type === "call"
-                              ? "bg-violet-500/10 text-violet-600"
-                              : "bg-sky-500/10 text-sky-600",
+                              ? "bg-violet-500/10 text-violet-600 dark:text-violet-300"
+                              : "bg-sky-500/10 text-sky-600 dark:text-sky-300",
                           )}
                         >
                           {item.type === "call" ? (
@@ -589,10 +690,10 @@ export default function AdminPage() {
                           )}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-xs leading-5 text-slate-600">
+                          <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">
                             {item.text}
                           </p>
-                          <p className="text-[10px] text-slate-400">
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
                             {format(item.at, "MMM d · h:mm a")}
                           </p>
                         </div>

@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { isBlockedEither } from "./blocks";
 import { getCurrentUser } from "./users";
 
 /** Deterministic pair key so a 1:1 conversation always maps to one row. */
@@ -21,6 +22,9 @@ export const getOrCreate = mutation({
 
     const other = await ctx.db.get(otherUserId);
     if (!other) throw new Error("User not found");
+    if (await isBlockedEither(ctx, me._id, otherUserId)) {
+      throw new Error("You can't chat with this person");
+    }
 
     const { userA, userB } = pairKey(me._id, otherUserId);
     const existing = await ctx.db
@@ -76,6 +80,10 @@ export const listForMe = query({
       seen.add(convo._id);
       const otherId = convo.userA === me._id ? convo.userB : convo.userA;
       const otherUser = await ctx.db.get(otherId);
+      // Hide chats with anyone either side has blocked.
+      if (!otherUser || (await isBlockedEither(ctx, me._id, otherId))) {
+        continue;
+      }
       const lastMessage = await ctx.db
         .query("messages")
         .withIndex("by_conversation", (q) =>

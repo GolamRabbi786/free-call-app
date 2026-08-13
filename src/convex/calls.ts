@@ -3,6 +3,7 @@ import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
+import { isBlockedEither } from "./blocks";
 import { callKindValidator } from "./schema";
 
 // Ringing sessions older than this are treated as stale/missed.
@@ -85,6 +86,11 @@ export const startCall = mutation({
 
     const callee = await ctx.db.get(calleeId);
     if (!callee) throw new Error("User not found");
+
+    // Blocked users can't call each other in either direction.
+    if (await isBlockedEither(ctx, me._id, calleeId)) {
+      throw new Error("You can't call this person");
+    }
 
     const now = Date.now();
     const endStale = async (

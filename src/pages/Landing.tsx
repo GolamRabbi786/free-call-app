@@ -8,12 +8,14 @@ import {
   MessageSquareText,
   MicOff,
   Monitor,
+  Moon,
   Phone,
   PhoneOff,
   Radio,
   ShieldCheck,
   Smartphone,
   Sparkles,
+  Sun,
   Video,
   Wifi,
   Zap,
@@ -25,6 +27,7 @@ import logo from "@/assets/logo.svg";
 import { AppBackground } from "@/components/AppBackground";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
+import { getTheme, toggleTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const AUTH_CTA = `/auth?returnTo=${encodeURIComponent("/dashboard")}`;
@@ -78,39 +81,58 @@ function BrandMark({ className }: { className?: string }) {
 /* ---------------------------------- Nav ---------------------------------- */
 
 function Navbar() {
+  const [theme, setTheme] = useState<"light" | "dark">(() => getTheme());
+  const handleThemeToggle = () => {
+    setTheme(toggleTheme());
+  };
   return (
     <header className="sticky top-0 z-40 px-4 pt-4">
       <nav className="glass mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-2xl py-2.5 pr-2.5 pl-4">
         <div className="flex items-center gap-2.5">
           <BrandMark />
           <div className="leading-tight">
-            <p className="text-base font-bold tracking-tight text-slate-800">
+            <p className="text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
               Free Call
             </p>
-            <p className="text-[10px] font-medium tracking-wide text-slate-500">
+            <p className="text-[10px] font-medium tracking-wide text-slate-500 dark:text-slate-400">
               Voice, video &amp; chat
             </p>
           </div>
         </div>
-        <div className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
-          <a href="#features" className="transition-colors hover:text-slate-900">
+        <div className="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
+          <a href="#features" className="transition-colors hover:text-slate-900 dark:hover:text-slate-50">
             Features
           </a>
-          <a href="#how" className="transition-colors hover:text-slate-900">
+          <a href="#how" className="transition-colors hover:text-slate-900 dark:hover:text-slate-50">
             How it works
           </a>
-          <a href="#faq" className="transition-colors hover:text-slate-900">
+          <a href="#faq" className="transition-colors hover:text-slate-900 dark:hover:text-slate-50">
             FAQ
           </a>
-          <a href="#download" className="transition-colors hover:text-slate-900">
+          <a href="#download" className="transition-colors hover:text-slate-900 dark:hover:text-slate-50">
             Download
           </a>
         </div>
         <div className="flex items-center gap-2">
           <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="rounded-full text-slate-700 dark:text-slate-200 hover:bg-white/70 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-50"
+            onClick={handleThemeToggle}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
+          </Button>
+          <Button
             asChild
             variant="ghost"
-            className="rounded-full text-slate-700 hover:bg-white/70 hover:text-slate-900"
+            className="rounded-full text-slate-700 dark:text-slate-200 hover:bg-white/70 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-50"
           >
             <Link to={AUTH_CTA}>Sign in</Link>
           </Button>
@@ -136,7 +158,7 @@ function HeroMock() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.6 }}
-        className="glass-soft absolute -top-5 -left-3 z-10 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-slate-700 sm:left-6"
+        className="glass-soft absolute -top-5 -left-3 z-10 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 sm:left-6"
       >
         <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
         Live presence
@@ -145,7 +167,7 @@ function HeroMock() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.65, duration: 0.6 }}
-        className="glass-soft absolute -right-3 -bottom-5 z-10 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-slate-700 sm:right-6"
+        className="glass-soft absolute -right-3 -bottom-5 z-10 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 sm:right-6"
       >
         <Radio className="size-3.5 text-sky-600" />
         Peer-to-peer · no servers
@@ -158,30 +180,30 @@ function HeroMock() {
         <div className="grid gap-3 sm:grid-cols-[1fr_1.15fr]">
           {/* fake chat column */}
           <div className="glass flex flex-col rounded-3xl p-4">
-            <div className="flex items-center gap-2.5 border-b border-white/60 pb-3">
+            <div className="flex items-center gap-2.5 border-b border-white/60 dark:border-white/10 pb-3">
               <span className="btn-gradient flex size-8 items-center justify-center rounded-full text-[11px] font-bold text-white">
                 RA
               </span>
               <div className="leading-tight">
-                <p className="text-xs font-bold text-slate-800">Rahim</p>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Rahim</p>
                 <p className="flex items-center gap-1 text-[10px] text-emerald-600">
                   <Wifi className="size-2.5" /> online
                 </p>
               </div>
             </div>
             <div className="flex flex-1 flex-col gap-2 py-4">
-              <div className="max-w-[80%] self-start rounded-2xl rounded-bl-md bg-white/80 px-3 py-1.5 text-[11px] text-slate-700 shadow-sm">
+              <div className="max-w-[80%] self-start rounded-2xl rounded-bl-md bg-white/80 dark:bg-white/10 px-3 py-1.5 text-[11px] text-slate-700 dark:text-slate-200 shadow-sm">
                 Bro, what are we up to tonight? 😄
               </div>
               <div className="max-w-[80%] self-end rounded-2xl rounded-br-md bg-gradient-to-br from-sky-500 to-indigo-500 px-3 py-1.5 text-[11px] text-white shadow-sm">
                 Let&apos;s do a video call! 🎥
               </div>
-              <div className="max-w-[80%] self-start rounded-2xl rounded-bl-md bg-white/80 px-3 py-1.5 text-[11px] text-slate-700 shadow-sm">
+              <div className="max-w-[80%] self-start rounded-2xl rounded-bl-md bg-white/80 dark:bg-white/10 px-3 py-1.5 text-[11px] text-slate-700 dark:text-slate-200 shadow-sm">
                 Yes! Let&apos;s start now
               </div>
             </div>
             <div className="glass-soft flex items-center gap-2 rounded-full p-1.5 pl-3">
-              <span className="flex-1 text-[10px] text-slate-400">
+              <span className="flex-1 text-[10px] text-slate-400 dark:text-slate-500">
                 Type a message…
               </span>
               <span className="btn-gradient flex size-6 items-center justify-center rounded-full">
@@ -192,12 +214,12 @@ function HeroMock() {
 
           {/* fake video call column */}
           <div className="relative flex min-h-[260px] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-sky-400 via-indigo-400 to-violet-400 p-4">
-            <div className="pointer-events-none absolute -top-10 -right-8 size-40 rounded-full bg-white/25 blur-2xl" />
+            <div className="pointer-events-none absolute -top-10 -right-8 size-40 rounded-full bg-white/25 dark:bg-white/[0.06] blur-2xl" />
             <div className="pointer-events-none absolute -bottom-12 -left-8 size-40 rounded-full bg-cyan-300/40 blur-2xl" />
 
             <div className="relative flex items-center justify-between">
               <div className="glass-strong flex items-center gap-2 rounded-full py-1.5 pr-4 pl-1.5 text-white">
-                <span className="flex size-7 items-center justify-center rounded-full bg-white/30 text-[10px] font-bold">
+                <span className="flex size-7 items-center justify-center rounded-full bg-white/30 dark:bg-white/[0.06] text-[10px] font-bold">
                   RA
                 </span>
                 <span className="text-xs font-semibold">Rahim · Video call</span>
@@ -210,23 +232,23 @@ function HeroMock() {
             <div className="relative flex flex-1 items-center justify-center">
               <motion.span
                 aria-hidden
-                className="absolute size-24 rounded-full border-2 border-white/40"
+                className="absolute size-24 rounded-full border-2 border-white/40 dark:border-white/10"
                 animate={{ scale: [1, 1.5], opacity: [0.7, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
               />
-              <span className="flex size-20 items-center justify-center rounded-full bg-white/25 text-2xl font-bold text-white ring-4 ring-white/50 backdrop-blur">
+              <span className="flex size-20 items-center justify-center rounded-full bg-white/25 dark:bg-white/[0.06] text-2xl font-bold text-white ring-4 ring-white/50 dark:ring-white/20 backdrop-blur">
                 RA
               </span>
             </div>
 
             <div className="relative flex items-center justify-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-full bg-white/90 text-sky-600 shadow-lg">
+              <span className="flex size-10 items-center justify-center rounded-full bg-white/90 dark:bg-white/10 text-sky-600 shadow-lg">
                 <MicOff className="size-4" />
               </span>
               <span className="flex size-11 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg">
                 <PhoneOff className="size-4" />
               </span>
-              <span className="flex size-10 items-center justify-center rounded-full bg-white/90 text-sky-600 shadow-lg">
+              <span className="flex size-10 items-center justify-center rounded-full bg-white/90 dark:bg-white/10 text-sky-600 shadow-lg">
                 <Video className="size-4" />
               </span>
             </div>
@@ -252,7 +274,7 @@ function Hero() {
           Free forever · No downloads · No hidden charges
         </span>
 
-        <h1 className="mt-7 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-6xl lg:text-7xl">
+        <h1 className="mt-7 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 sm:text-6xl lg:text-7xl">
           Talk to anyone,
           <br />
           <span className="text-gradient-cool">for free.</span>
@@ -261,7 +283,7 @@ function Hero() {
         <p className="mt-4 text-lg font-medium text-indigo-700/90">
           Free voice calls, video calls and chat — no hassle, no charges.
         </p>
-        <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
+        <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
           Free Call gives you unlimited voice calls, HD video calls and instant
           chat — right in your browser. No app installs, no minutes, no fees.
           Just pick a person and start talking.
@@ -282,13 +304,13 @@ function Hero() {
             asChild
             variant="outline"
             size="lg"
-            className="glass-soft h-12 rounded-full border-white/80 px-8 text-slate-700 hover:bg-white/70"
+            className="glass-soft h-12 rounded-full border-white/80 dark:border-white/20 px-8 text-slate-700 dark:text-slate-200 hover:bg-white/70 dark:hover:bg-white/10"
           >
             <a href="#how">See how it works</a>
           </Button>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs font-medium text-slate-500">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs font-medium text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1.5">
             <BadgeCheck className="size-4 text-emerald-500" /> Unlimited calls
           </span>
@@ -342,7 +364,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "No setup, no fees",
-    body: "Sign in with just an email — or skip straight to guest mode. There are no plans, paywalls or premium tiers.",
+    body: "Sign in with your phone number — a quick SMS code gets you in. No passwords, no plans, no paywalls.",
     accent: "text-amber-600 bg-amber-500/10",
   },
 ];
@@ -354,10 +376,10 @@ function Features() {
         <span className="glass-soft rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-700">
           Everything included
         </span>
-        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-4xl">
           One app for every conversation
         </h2>
-        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+        <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300 sm:text-base">
           Calls, video and chat in one place — built to be simple enough for
           anyone, free enough for everyone.
         </p>
@@ -375,10 +397,10 @@ function Features() {
               >
                 <feature.icon className="size-5" />
               </div>
-              <h3 className="mt-4 text-base font-bold text-slate-800">
+              <h3 className="mt-4 text-base font-bold text-slate-800 dark:text-slate-100">
                 {feature.title}
               </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 {feature.body}
               </p>
             </div>
@@ -416,7 +438,7 @@ function HowItWorks() {
         <span className="glass-soft rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-700">
           How it works
         </span>
-        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-4xl">
           Up and talking in under a minute
         </h2>
       </Reveal>
@@ -432,10 +454,10 @@ function HowItWorks() {
               <span className="text-gradient-cool text-4xl font-extrabold">
                 {step.number}
               </span>
-              <h3 className="mt-3 text-base font-bold text-slate-800">
+              <h3 className="mt-3 text-base font-bold text-slate-800 dark:text-slate-100">
                 {step.title}
               </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 {step.body}
               </p>
             </div>
@@ -476,7 +498,7 @@ function Testimonials() {
         <span className="glass-soft rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-700">
           Loved by real people
         </span>
-        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-4xl">
           Made for conversations that matter
         </h2>
       </Reveal>
@@ -492,16 +514,16 @@ function Testimonials() {
                   </span>
                 ))}
               </div>
-              <blockquote className="mt-3 flex-1 text-sm leading-6 text-slate-600">
+              <blockquote className="mt-3 flex-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 “{t.quote}”
               </blockquote>
-              <figcaption className="mt-5 flex items-center gap-3 border-t border-white/60 pt-4">
+              <figcaption className="mt-5 flex items-center gap-3 border-t border-white/60 dark:border-white/10 pt-4">
                 <span className="btn-gradient flex size-9 items-center justify-center rounded-full text-xs font-bold text-white">
                   {t.name.slice(0, 2).toUpperCase()}
                 </span>
                 <div className="leading-tight">
-                  <p className="text-sm font-bold text-slate-800">{t.name}</p>
-                  <p className="text-[11px] text-slate-500">{t.role}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{t.name}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">{t.role}</p>
                 </div>
               </figcaption>
             </figure>
@@ -540,7 +562,7 @@ function Faq() {
         <span className="glass-soft rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-700">
           FAQ
         </span>
-        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-4xl">
           Questions, answered
         </h2>
       </Reveal>
@@ -549,13 +571,13 @@ function Faq() {
         {FAQS.map((item, index) => (
           <Reveal key={item.q} delay={index * 0.05}>
             <details className="glass group rounded-2xl px-5 py-4 open:pb-5">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-bold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
                 {item.q}
-                <span className="glass-soft flex size-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-transform duration-200 group-open:rotate-45">
+                <span className="glass-soft flex size-6 shrink-0 items-center justify-center rounded-full text-slate-500 dark:text-slate-400 transition-transform duration-200 group-open:rotate-45">
                   <span className="text-base leading-none">+</span>
                 </span>
               </summary>
-              <p className="mt-3 text-sm leading-6 text-slate-500">{item.a}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.a}</p>
             </details>
           </Reveal>
         ))}
@@ -603,10 +625,10 @@ function DownloadApp() {
         <span className="glass-soft rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-700">
           Get the app
         </span>
-        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+        <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-4xl">
           Download Free Call on your phone
         </h2>
-        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+        <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300 sm:text-base">
           Install it like a native app — one tap from your browser, no app store,
           no fees. Calls and chat stay free forever.
         </p>
@@ -623,10 +645,10 @@ function DownloadApp() {
                 <span className="btn-gradient flex size-14 items-center justify-center rounded-2xl text-white shadow-lg">
                   <Download className="size-7" />
                 </span>
-                <h3 className="mt-4 text-xl font-bold text-slate-800">
+                <h3 className="mt-4 text-xl font-bold text-slate-800 dark:text-slate-100">
                   Install the app in one tap
                 </h3>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500 dark:text-slate-400">
                   Adds Free Call to your home screen with its own app icon and
                   window — just like a native app. You&apos;ll get call &amp;
                   message notifications even when the app is closed.
@@ -644,7 +666,7 @@ function DownloadApp() {
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold text-slate-700">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                   Your browser doesn&apos;t offer a one-tap install here — but
                   it&apos;s still just two taps:
                 </p>
@@ -657,16 +679,16 @@ function DownloadApp() {
                       <span className="flex size-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
                         <step.icon className="size-4" />
                       </span>
-                      <p className="mt-2.5 text-xs font-bold text-slate-800">
+                      <p className="mt-2.5 text-xs font-bold text-slate-800 dark:text-slate-100">
                         {step.title}
                       </p>
-                      <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                      <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
                         {step.body}
                       </p>
                     </div>
                   ))}
                 </div>
-                <p className="mt-6 flex items-center gap-1.5 text-xs text-slate-400">
+                <p className="mt-6 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
                   <CheckCircle2 className="size-3.5 text-emerald-500" />
                   Works offline once installed — calls and chat stay free.
                 </p>
@@ -691,11 +713,11 @@ function FinalCta() {
           <div className="pointer-events-none absolute -right-16 -bottom-24 h-56 w-56 rounded-full bg-cyan-200/50 blur-3xl" />
 
           <div className="relative">
-            <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+            <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 sm:text-5xl">
               Your next conversation is{" "}
               <span className="text-gradient-cool">one click away</span>
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
               Join Free Call today and start making free calls, video calls and
               chats — zero hassle, forever free.
             </p>
@@ -714,7 +736,7 @@ function FinalCta() {
                 asChild
                 variant="outline"
                 size="lg"
-                className="glass-soft h-12 rounded-full border-white/80 px-8 text-slate-700 hover:bg-white/70"
+                className="glass-soft h-12 rounded-full border-white/80 dark:border-white/20 px-8 text-slate-700 dark:text-slate-200 hover:bg-white/70 dark:hover:bg-white/10"
               >
                 <Link to="/dashboard">Open the app</Link>
               </Button>
@@ -730,27 +752,27 @@ function FinalCta() {
 
 function Footer() {
   return (
-    <footer className="relative border-t border-white/60 bg-white/30 backdrop-blur-md">
+    <footer className="relative border-t border-white/60 dark:border-white/10 bg-white/30 dark:bg-white/[0.06] backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row">
         <div className="flex items-center gap-2.5">
           <BrandMark className="size-8 rounded-lg" />
-          <p className="text-sm font-bold text-slate-800">Free Call</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Free Call</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Free voice calls, video calls &amp; chat.
           </p>
         </div>
-        <div className="flex items-center gap-5 text-xs text-slate-500">
-          <a href="#features" className="transition-colors hover:text-slate-800">
+        <div className="flex items-center gap-5 text-xs text-slate-500 dark:text-slate-400">
+          <a href="#features" className="transition-colors hover:text-slate-800 dark:hover:text-slate-100">
             Features
           </a>
-          <a href="#how" className="transition-colors hover:text-slate-800">
+          <a href="#how" className="transition-colors hover:text-slate-800 dark:hover:text-slate-100">
             How it works
           </a>
           <a
             href="https://freebuff.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="transition-colors hover:text-slate-800"
+            className="transition-colors hover:text-slate-800 dark:hover:text-slate-100"
           >
             Built with freebuff
           </a>
