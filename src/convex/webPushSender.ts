@@ -180,6 +180,130 @@ async function sendPushRequest(
   return res.status;
 }
 
+/* ---------- FCM (native Android app) ---------- */
+
+type FcmConfig = { projectId: string; clientEmail: string; privateKey: string };
+
+let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
+function ensureFcmConfig(): FcmConfig | null {
+  const projectId = process.env.FCM_PROJECT_ID;
+  const clientEmail = process.env.FCM_CLIENT_EMAIL;
+  const privateKey = process.env.FCM_PRIVATE_KEY;
+  if (!projectId || !clientEmail || !privateKey) return null;
+  return { projectId, clientEmail, privateKey };
+}
+
+/** Exchange a signed service-account JWT for an OAuth2 access token (cached ~1h). */
+async function getFcmAccessToken(fcm: FcmConfig): Promise<string | null> {
+  if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60_000) {
+    return cachedAccessToken.token;
+  }
+  try {
+    const header = { alg: "RS256", typ: "JWT" };
+    const now = Math.floor(Date.now() / 1000);
+    const claims = {
+      iss: fcm.clientEmail,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: now,
+      exp: now + 3600,
+    };
+    const toSign = `${base64UrlEncode(Buffer.from(JSON.stringify(header)))}.${base64UrlEncode(Buffer.from(JSON.stringify(claims)))}`;
+    const key = createPrivateKey(fcm.privateKey);
+    const sign = createSign("sha256");
+    sign.update(toSign);
+    sign.end();
+    const jwt = `${toSign}.${base64UrlEncode(sign.sign(key))}`;
+
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      access_token?: string;
+      expires_in?: number;
+    };
+    if (!data.access_token) return null;
+    cachedAccessToken = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
+    };
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
+
+/** Deliver one notification to every FCM-registered Android device of a user. */
+async function sendFcm(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  notification: {
+    title: string;
+    body: string;
+    url: string;
+    type: "call" | "message";
+  },
+): Promise<void> {
+  const fcm = ensureFcmConfig();
+  if (!fcm) return;
+
+  const tokens = await ctx.runQuery(api.fcm.tokensFor, { userId });
+  if (tokens.length === 0) return;
+
+  const accessToken = await getFcmAccessToken(fcm);
+  if (!accessToken) return;
+
+  const isCall = notification.type === "call";
+  const message = {
+    message: {
+      token: "", // set per token below
+      notification: { title: notification.title, body: notification.body },
+      data: { url: notification.url, type: notification.type },
+      android: {
+        priority: "high" as const,
+        ttl: "86400s",
+        notification: {
+          channelId: isCall ? "calls" : "messages",
+          sound: isCall ? "freecall_ring" : "default",
+          visibility: "public" as const,
+        },
+      },
+    },
+  };
+
+  await Promise.all(
+    tokens.map(async (sub) => {
+      try {
+        message.message.token = sub.token;
+        const res = await fetch(
+          `https://fcm.googleapis.com/v1/projects/${fcm.projectId}/messages:send`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(message),
+          },
+        );
+        // 404 = UNREGISTERED (uninstalled / token rotated) — stop trying.
+        if (res.status === 404) {
+          await ctx.runMutation(api.fcm.deleteToken, { tokenId: sub._id });
+        }
+      } catch {
+        // transient network issue — try again next time
+      }
+    }),
+  );
+}
+
 /* ---------- Delivery ---------- */
 
 /**
@@ -191,8 +315,17 @@ async function sendPushRequest(
 async function sendPush(
   ctx: ActionCtx,
   userId: Id<"users">,
-  notification: { title: string; body: string; url: string },
+  notification: {
+    title: string;
+    body: string;
+    url: string;
+    type: "call" | "message";
+  },
 ): Promise<void> {
+  // Native Android app (FCM) — rings even when the app is closed.
+  await sendFcm(ctx, userId, notification);
+
+  // Web / PWA push.
   const vapid = ensureVapidKeys();
   if (!vapid) return;
 
@@ -251,6 +384,7 @@ export const notifyMessage = action({
       title: name,
       body,
       url: "/dashboard",
+      type: "message",
     });
   },
 });
@@ -270,6 +404,7 @@ export const notifyIncomingCall = action({
       title: "Incoming call",
       body: `${name} wants a ${args.kind === "video" ? "video" : "voice"} call`,
       url: "/dashboard",
+      type: "call",
     });
   },
 });
@@ -294,6 +429,7 @@ export const notifyGroupCall = action({
           title: `${displayName(name)} started a group call`,
           body: `${args.kind === "video" ? "Video" : "Voice"} call in ${groupLabel}`,
           url: "/dashboard",
+          type: "call",
         }),
       ),
     );

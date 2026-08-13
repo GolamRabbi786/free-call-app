@@ -270,3 +270,31 @@ When using convex, make sure:
 - This includes importing generated files like `@/convex/_generated/server`, `@/convex/_generated/api`
 - Remember to import functions like useQuery, useMutation, useAction, etc. from `convex/react`
 - NEVER have return type validators.
+
+## Firebase (FCM) Android push — setup
+
+The Android app (Capacitor) uses Firebase Cloud Messaging so calls/messages
+ring the phone even when the app is closed. Two things are required from your
+Firebase project:
+
+1. **`google-services.json`** — Firebase console → Project settings → Your apps
+   → Android (package `com.freecall.app`) → download, then place the file at
+   `android/app/google-services.json`. (The gradle plugin activates
+   automatically when this file exists.)
+
+2. **Service account keys** — Firebase console → Project settings → Service
+   accounts → "Generate new private key", then paste into the Keys/API keys
+   tab:
+   - `FCM_PROJECT_ID` — from the JSON (`project_id`)
+   - `FCM_CLIENT_EMAIL` — from the JSON (`client_email`)
+   - `FCM_PRIVATE_KEY` — from the JSON (`private_key`, the full PEM block)
+
+After that, rebuild the APK:
+
+```bash
+bun run android:apk
+```
+
+Call notifications use the bundled ringtone (`res/raw/freecall_ring.wav`,
+regenerate with `bun run scripts/generate-ringtone.mjs`). Message
+notifications use the default sound. Web/PWA push is separate (VAPID keys).

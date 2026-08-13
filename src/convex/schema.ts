@@ -152,6 +152,15 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_user", ["userId"]),
 
+    // Android (Capacitor + FCM) push tokens. Web push subscriptions live in
+    // `webPushSubscriptions`; FCM tokens get delivered via the FCM HTTP v1 API
+    // so alerts still ring when the native app is closed.
+    fcmSubscriptions: defineTable({
+      userId: v.id("users"),
+      token: v.string(),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
+
     // One presence document per user while they are online (heartbeat kept fresh).
     presence: defineTable({
       userId: v.id("users"),

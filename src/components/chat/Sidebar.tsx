@@ -34,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import logo from "@/assets/logo.svg";
 import { describeCallMessage } from "@/lib/call-history";
+import { getRegisteredFcmToken } from "@/lib/fcm";
 import {
   notificationPermission,
   requestNotificationPermission,
@@ -83,6 +84,7 @@ export function Sidebar({
   const createGroup = useMutation(api.groups.create);
   const vapidPublicKey = useQuery(api.webPush.vapidPublicKey);
   const savePushSubscription = useMutation(api.webPush.saveSubscription);
+  const removeFcmToken = useMutation(api.fcm.removeFcmToken);
 
   const [query, setQuery] = useState("");
   const [editOpen, setEditOpen] = useState(false);
@@ -159,6 +161,16 @@ export function Sidebar({
   }, [groups, query]);
 
   const handleSignOut = async () => {
+    // Drop this device's FCM token while we're still authenticated, so the
+    // phone stops ringing for an account nobody is signed into anymore.
+    const fcmToken = getRegisteredFcmToken();
+    if (fcmToken) {
+      try {
+        await removeFcmToken({ token: fcmToken });
+      } catch {
+        /* token already gone — fine */
+      }
+    }
     await signOut();
     navigate("/");
   };

@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { getActiveChat } from "@/lib/active-chat";
+import { isNativeApp, registerForFcm } from "@/lib/fcm";
 import { showNotification } from "@/lib/notify";
 import {
   playMessageDing,
@@ -80,6 +81,7 @@ export function NotificationWatcher() {
   const acceptCallMutation = useMutation(api.calls.acceptCall);
   const declineCallMutation = useMutation(api.calls.declineCall);
   const savePushSubscription = useMutation(api.webPush.saveSubscription);
+  const saveFcmToken = useMutation(api.fcm.saveFcmToken);
 
   const [ringCall, setRingCall] = useState<IncomingCallInfo | null>(null);
   const [groupCallInfo, setGroupCallInfo] =
@@ -301,6 +303,19 @@ export function NotificationWatcher() {
       },
     });
   }, [myId, vapidPublicKey, savePushSubscription]);
+
+  // ---- Native Android: register with FCM (rings even when app is closed) --
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    if (!myId) return;
+    void registerForFcm(
+      (token) => saveFcmToken({ token }),
+      (url) => navigate(url),
+    );
+    // Clean up this device's token on unmount only when we leave the app for
+    // good (sign-out is handled by the Sidebar while still authenticated).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myId, saveFcmToken, navigate]);
 
   const acceptCall = useCallback(
     async (sessionId: string) => {
