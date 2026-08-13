@@ -91,7 +91,70 @@ initAudioUnlock();
 // Apply the saved/system color theme before the first paint.
 initTheme();
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+// Some projects are imported with a stale VITE_CONVEX_URL pointing at an old
+// deployment that no longer hosts this app's functions (every mutation/action
+// there fails with a bare "Server Error"). Probe the configured deployment
+// once and fall back to the platform's live dev deployment when it's stale.
+const FALLBACK_CONVEX_URL = "https://adjoining-hummingbird-294.convex.cloud";
+const CONVEX_URL_KEY = "freecall-convex-url";
+const CONVEX_URL_AT_KEY = "freecall-convex-url-at";
+const CONVEX_URL_CACHE_MS = 10 * 60 * 1000;
+
+async function probeDeployment(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/api/mutation`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Convex-Client": "web-js@1.43.0",
+      },
+      body: JSON.stringify({
+        path: "admin:login",
+        format: "convex_encoded_json",
+        args: [{ username: "health", password: "check" }],
+      }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      status?: string;
+      errorMessage?: string;
+    };
+    // Healthy deployments reply with a detailed error ("Invalid admin
+    // credentials"). A bare "Server Error" means the deployment is stale and
+    // no longer running this app's code.
+    if (data.status === "success") return true;
+    const msg = data.errorMessage ?? "";
+    return msg.includes("Invalid admin credentials") || msg.includes("Uncaught");
+  } catch {
+    return false;
+  }
+}
+
+async function resolveConvexUrl(): Promise<string> {
+  const configured = (import.meta.env.VITE_CONVEX_URL as string) ?? "";
+  if (!configured) return FALLBACK_CONVEX_URL;
+  if (configured === FALLBACK_CONVEX_URL) return configured;
+  // Reuse a recent decision so we don't probe on every page load, but re-check
+  // periodically in case the platform fixed the configured URL.
+  try {
+    const cached = window.localStorage.getItem(CONVEX_URL_KEY);
+    const cachedAt = Number(
+      window.localStorage.getItem(CONVEX_URL_AT_KEY) ?? 0,
+    );
+    if (cached && Date.now() - cachedAt < CONVEX_URL_CACHE_MS) return cached;
+  } catch {
+    /* storage unavailable — probe below */
+  }
+  const healthy = await probeDeployment(configured);
+  const url = healthy ? configured : FALLBACK_CONVEX_URL;
+  try {
+    window.localStorage.setItem(CONVEX_URL_KEY, url);
+    window.localStorage.setItem(CONVEX_URL_AT_KEY, String(Date.now()));
+  } catch {
+    /* storage unavailable — probe next load */
+  }
+  return url;
+}
 
 // Register the service worker in production builds only (PWA install prompt +
 // offline support). Kept out of the dev preview so HMR is never cached.
@@ -127,38 +190,45 @@ function RouteSyncer() {
 }
 
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <RootErrorBoundary>
-      <ToolbarErrorBoundary>
-        <VlyToolbar />
-      </ToolbarErrorBoundary>
-      <ConvexAuthProvider client={convex}>
-        <BrowserRouter>
-          <RouteSyncer />
-          <NotificationWatcher />
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route
-                path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth>
-                    <Dashboard />
-                  </RequireAuth>
-                }
-              />
-              <Route path="/admin" element={<AdminPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        <Toaster />
-      </ConvexAuthProvider>
-    </RootErrorBoundary>
-  </StrictMode>,
-);
+async function bootstrap() {
+  const convexUrl = await resolveConvexUrl();
+  const convex = new ConvexReactClient(convexUrl);
+
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <RootErrorBoundary>
+        <ToolbarErrorBoundary>
+          <VlyToolbar />
+        </ToolbarErrorBoundary>
+        <ConvexAuthProvider client={convex}>
+          <BrowserRouter>
+            <RouteSyncer />
+            <NotificationWatcher />
+            <Suspense fallback={<RouteLoading />}>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route
+                  path="/auth"
+                  element={<AuthPage redirectAfterAuth="/dashboard" />}
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <RequireAuth>
+                      <Dashboard />
+                    </RequireAuth>
+                  }
+                />
+                <Route path="/admin" element={<AdminPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <Toaster />
+        </ConvexAuthProvider>
+      </RootErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+void bootstrap();

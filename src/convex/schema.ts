@@ -196,6 +196,15 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_token", ["token"]),
 
+    // Dev-mode email verification codes. When no email service is configured
+    // the code is stored here so the email OTP sign-up still completes
+    // end-to-end and the UI can show the code instead of failing.
+    devCodes: defineTable({
+      identifier: v.string(),
+      code: v.string(),
+      expiresAt: v.number(),
+    }).index("by_identifier", ["identifier"]),
+
     // The project source ZIP lives in the database as base64 chunks so only
     // the admin panel (token-gated) can read it — no public link anywhere.
     projectZipMeta: defineTable({
