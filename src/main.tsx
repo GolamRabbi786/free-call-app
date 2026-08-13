@@ -1,5 +1,6 @@
 import '@vly-ai/integrations';
 import { NotificationWatcher } from "@/components/NotificationWatcher";
+import { initAudioUnlock } from "@/lib/sounds";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
@@ -81,6 +82,10 @@ class RootErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
+
+// Unlock the audio context on the first user interaction so call ringtones
+// and message dings can play (browsers block audio until a gesture).
+initAudioUnlock();
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 

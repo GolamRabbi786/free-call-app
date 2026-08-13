@@ -105,6 +105,9 @@ export function Sidebar({
         );
         setPushEnabled(ok);
         if (ok) pushText = " Alerts will also arrive when the app is closed.";
+      } else if (pushSupported() && !vapidPublicKey) {
+        pushText =
+          " (App-closed alerts still need the VAPID key set on the server — in-app alerts are on now.)";
       }
       toast.success(`Notifications on — you'll hear about calls & messages.${pushText}`);
     } else if (result === "denied") {

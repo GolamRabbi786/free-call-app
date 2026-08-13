@@ -8,6 +8,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { getActiveChat } from "@/lib/active-chat";
 import { showNotification } from "@/lib/notify";
 import {
+  playMessageDing,
+  startRingtone,
+  stopRingtone,
+  vibrateCall,
+  vibrateMessage,
+} from "@/lib/sounds";
+import {
   isPushEnabled,
   pushSupported,
   setPushEnabled,
@@ -26,8 +33,12 @@ const notifiedCalls = new Set<string>();
 const seenMessages = new Set<string>();
 const groupCallShown = new Set<string>();
 let seededUser: string | null = null;
+// Set at page load: messages sent after this point are "new" and worth
+// alerting about — messages from before (e.g. after a reload) are history.
+// This also covers mobile tabs the OS froze: when the tab resumes, messages
+// that arrived meanwhile are newer than this timestamp and still alert.
+const sessionStartTime = Date.now();
 
-const MESSAGE_ALERT_WINDOW_MS = 2 * 60_000;
 const PROMPT_KEY_PREFIX = "freecall-notif-prompted-";
 
 /**
@@ -75,7 +86,18 @@ export function NotificationWatcher() {
     useState<ActiveGroupCallInfo | null>(null);
   const [popups, setPopups] = useState<PopupMessage[]>([]);
 
-  // ---- Incoming 1:1 call -----------------------------------------------
+  // ---- Incoming 1:1 call: ringtone -------------------------------------
+  useEffect(() => {
+    if (incoming && !hidden) {
+      startRingtone();
+      vibrateCall();
+    } else {
+      stopRingtone();
+    }
+    return () => stopRingtone();
+  }, [incoming?._id, incoming !== null, hidden]);
+
+  // ---- Incoming 1:1 call: alerts ---------------------------------------
   useEffect(() => {
     if (!incoming || !myId) return;
     const sessionId = incoming._id;
@@ -178,8 +200,9 @@ export function NotificationWatcher() {
     for (const item of newMessages) {
       if (seenMessages.has(item.messageId)) continue;
       seenMessages.add(item.messageId);
-      // Never spam stale history after a reload — only genuinely fresh items.
-      if (Date.now() - item.time > MESSAGE_ALERT_WINDOW_MS) continue;
+      // Only genuinely fresh items (after this page session started) — never
+      // spam the history that was already there before the user arrived.
+      if (item.time < sessionStartTime) continue;
       fresh.push({
         key: item.key,
         messageId: item.messageId,
@@ -211,6 +234,10 @@ export function NotificationWatcher() {
       const next = [...prev, ...visible];
       return next.slice(-3);
     });
+    // Audible + haptic cue so a new message is noticed even when the popup
+    // isn't glanced at right away.
+    playMessageDing();
+    vibrateMessage();
   }, [newMessages, myId, hidden, navigate]);
 
   // ---- One-time notification/push auto-enable ---------------------------
