@@ -1,0 +1,17 @@
+{
+  "name": "Free Call — Free voice calls, video calls & chat",
+  "short_name": "Free Call",
+  "description": "Free voice calls, video calls and chat — right in your browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7fbff",
+  "theme_color": "#f7fbff",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
