@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/input-otp";
 
 import { useAuth } from "@/hooks/use-auth";
+import { useConvex } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import logo from "@/assets/logo.svg";
 import { Link } from "react-router";
 import { AppBackground } from "@/components/AppBackground";
@@ -52,6 +54,20 @@ function resolveRedirectAfterAuth(
 
 type Method = "phone" | "email";
 type Step = "input" | { method: Method; identifier: string };
+
+// The auth library wraps server errors in a noisy envelope like
+// "[CONVEX A(auth:signIn)] [Request ID: ...] Server Error Called by client".
+// Pull out just the real message so the UI shows something readable.
+function friendlyAuthError(error: unknown): string {
+  const raw =
+    error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  const match = raw.match(/\] (.*?) Called by client/);
+  const inner = match?.[1] ?? raw;
+  if (inner === "Server Error") {
+    return "Something went wrong on the server. Please try again.";
+  }
+  return inner || "Something went wrong. Please try again.";
+}
 
 function BrandPanel() {
   return (
@@ -139,6 +155,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const convex = useConvex();
   const [theme, setTheme] = useState<"light" | "dark">(() => getTheme());
 
   useEffect(() => {
@@ -152,8 +170,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   const fullPhone = () => {
-    const digits = phone.replace(/\D/g, "");
+    let digits = phone.replace(/\D/g, "");
     const code = countryCode.replace(/\D/g, "");
+    // With a country code selected, drop the local trunk prefix "0" so
+    // +880 + 01903162833 becomes +8801903162833 (valid E.164).
+    if (code && digits.startsWith("0")) {
+      digits = digits.replace(/^0+/, "");
+    }
     return `+${code}${digits}`;
   };
 
@@ -163,8 +186,20 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setError(null);
     try {
       if (method === "phone") {
-        await signIn("phone-otp", { phone: fullPhone() });
-        setStep({ method: "phone", identifier: fullPhone() });
+        const normalized = fullPhone();
+        await signIn("phone-otp", { phone: normalized });
+        setStep({ method: "phone", identifier: normalized });
+        setDevCode(null);
+        // Dev fallback: when SMS isn't configured yet the code is stored in
+        // devOtps — fetch it so the user can still sign in.
+        try {
+          const dev = await convex.query(api.auth.devOtp.get, {
+            phone: normalized,
+          });
+          if (dev) setDevCode(dev.code);
+        } catch {
+          // Not dev mode (or query failed) — ignore, real SMS was sent.
+        }
       } else {
         const formData = new FormData(event.currentTarget);
         await signIn("email-otp", formData);
@@ -173,11 +208,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       setIsLoading(false);
     } catch (error) {
       console.error("Sign-in error:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Could not send the code. Please try again.",
-      );
+      setError(friendlyAuthError(error));
       setIsLoading(false);
     }
   };
@@ -189,6 +220,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     try {
       if (step !== "input" && step.method === "phone") {
         await signIn("phone-otp", { phone: step.identifier, code: otp });
+        // Signed in — clean up the dev-mode code if one was shown.
+        void convex
+          .mutation(api.auth.devOtp.clear, { phone: step.identifier })
+          .catch(() => {});
       } else {
         const formData = new FormData(event.currentTarget);
         await signIn("email-otp", formData);
@@ -207,6 +242,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setStep("input");
     setOtp("");
     setError(null);
+    setDevCode(null);
   };
 
   const isPhoneStep = step !== "input" && step.method === "phone";
@@ -436,6 +472,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                           </InputOTP>
                         </div>
 
+                        {devCode && (
+                          <div className="mt-3 rounded-xl border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-center text-xs font-semibold text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
+                            SMS not configured yet — dev code:{" "}
+                            <span className="font-mono text-base font-bold tracking-[0.3em]">
+                              {devCode}
+                            </span>
+                          </div>
+                        )}
+
                         {error && (
                           <p className="mt-3 text-center text-sm text-rose-500 dark:text-rose-400">
                             {error}
@@ -473,14 +518,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <div className="glass-soft flex items-center justify-center gap-2 border-t border-white/60 px-6 py-3.5 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
                   <span>
                     Secured by{" "}
-                    <a
-                      href="https://freebuff.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-primary transition-colors"
-                    >
-                      freebuff.com
-                    </a>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">
+                      Golam Rabbi Engineer
+                    </span>
                   </span>
                   <span aria-hidden>·</span>
                   <Link

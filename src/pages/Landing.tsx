@@ -768,14 +768,12 @@ function Footer() {
           <a href="#how" className="transition-colors hover:text-slate-800 dark:hover:text-slate-100">
             How it works
           </a>
-          <a
-            href="https://freebuff.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-slate-800 dark:hover:text-slate-100"
-          >
-            Built with freebuff
-          </a>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            Built with{" "}
+            <span className="font-bold text-slate-700 dark:text-slate-200">
+              Golam Rabbi Engineer
+            </span>
+          </span>
         </div>
       </div>
     </footer>
